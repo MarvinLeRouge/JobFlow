@@ -1,0 +1,170 @@
+{
+  "_comment": "Patterns d'extraction par provider. Testé sur fichiers EML mai-juin 2026.",
+  "_version": "1.1.0",
+
+  "indeed_alerte": {
+    "description": "Alertes groupées Indeed (X nouveaux emplois...)",
+    "folder": "indeed",
+    "sender_domains": ["jobalert.indeed.com", "indeed.com"],
+    "sender_pattern": "donotreply@jobalert.indeed.com",
+    "subject_hint": "nouveaux? emplois?",
+    "offers_per_email": "1-30+",
+    "id_field": "jk",
+    "id_pattern": "jk=([a-f0-9]{16})",
+    "url_template": "https://fr.indeed.com/viewjob?jk={id}",
+    "url_qualite": "construite",
+    "title_pattern": "<h2[^>]*>\\s*<a[^>]+jk=[a-f0-9]{16}[^>]*>([^<]+)</a>",
+    "extractable": ["titre", "entreprise", "ville", "dept", "salaire", "contrat", "resume"],
+    "notes": "Le jk= est présent dans les href des <h2>. 1 offre sponsorisée (pagead) peut ne pas avoir de jk visible — fallback sur texte uniquement."
+  },
+
+  "indeed_match": {
+    "description": "Match direct Indeed (une offre proposée individuellement)",
+    "folder": "indeed",
+    "sender_domains": ["match.indeed.com"],
+    "sender_pattern": "donotreply@match.indeed.com",
+    "subject_hint": "–.*\\(H/F\\)|–.*H_F",
+    "offers_per_email": "1",
+    "id_field": null,
+    "id_pattern": null,
+    "url_template": null,
+    "url_qualite": "email",
+    "url_pattern": "href=\"(https://cts\\.indeed\\.com/v3/[^\"]+)\"",
+    "url_notes": "URLs compressées cts.indeed.com/v3/ — non décodables sans appel réseau. Stocker telle quelle.",
+    "extractable": ["titre", "entreprise", "ville", "dept", "salaire", "contrat"],
+    "title_from_subject": true,
+    "subject_pattern": "^(.+?)\\s+[–-]\\s+(.+)$",
+    "notes": "Titre et entreprise lisibles directement dans le Subject. Salaire et localisation dans le texte de l'email."
+  },
+
+  "linkedin": {
+    "description": "Alertes emploi LinkedIn (notifications de correspondance)",
+    "folder": "linkedin",
+    "sender_domains": ["linkedin.com"],
+    "sender_pattern": "jobalerts-noreply@linkedin.com",
+    "subject_hint": "chez ",
+    "offers_per_email": "1-5",
+    "id_field": "job_id",
+    "id_pattern": "jobs/view/(\\d+)",
+    "url_template": "https://www.linkedin.com/jobs/view/{id}",
+    "url_qualite": "construite",
+    "title_pattern": "jobs/view/\\d+[^\"]*\"[^>]*>([^<]{5,80})</a>",
+    "extractable": ["titre", "entreprise", "ville", "contrat"],
+    "notes": "3 offres typiquement par email. Le titre est l'ancre du lien jobs/view/{id}. L'entreprise suit dans le texte."
+  },
+
+  "meteojob_company": {
+    "description": "Notification Meteojob d'une offre spécifique (COMPANY recrute un JOB)",
+    "folder": "meteojob",
+    "sender_domains": ["meteojob.com"],
+    "sender_pattern": "ne-pas-repondre@meteojob.com",
+    "subject_hint": "recrute un",
+    "offers_per_email": "1",
+    "id_field": "meteojob_id",
+    "id_pattern": "candidat/offres/offre-d-emploi-.+-?(\\d{6,})(?:\\?|$)",
+    "url_template": null,
+    "url_qualite": "construite",
+    "url_pattern": "href=\"(https://www\\.meteojob\\.com/candidat/offres/offre-d-emploi-[^\"]+)\"",
+    "url_strip_params": true,
+    "url_notes": "Extraire l'URL complète puis supprimer les query params (?...) — le slug+ID numérique est stable.",
+    "extractable": ["titre", "entreprise", "ville", "dept", "contrat"],
+    "title_from_subject": true,
+    "subject_pattern": "^\\s*(.+?)\\s+recrute un\\s+(.+)\\s*$",
+    "notes": "Entreprise et titre lisibles dans le Subject. L'URL canonique est https://www.meteojob.com/candidat/offres/{slug}-{id} sans les UTM."
+  },
+
+  "meteojob_digest": {
+    "description": "Digest Meteojob (30+ offres Informatique/Telecom/Internet)",
+    "folder": "meteojob",
+    "sender_domains": ["meteojob.com"],
+    "sender_pattern": "ne-pas-repondre@meteojob.com",
+    "subject_hint": "offres .+ sur Meteojob",
+    "offers_per_email": "0",
+    "skip": true,
+    "notes": "Email de type digest : lien vers une page de recherche, pas d'offres individuelles. À ignorer pour l'extraction."
+  },
+
+  "talent_com": {
+    "description": "Alertes Talent.com (alerte emploi quotidienne)",
+    "folder": "talent-com",
+    "sender_domains": ["alerts.talent.com", "talent.com"],
+    "sender_pattern": "no-reply@alerts.talent.com",
+    "subject_hint": "à ne pas manquer",
+    "offers_per_email": "5-15",
+    "id_field": null,
+    "id_pattern": null,
+    "url_template": null,
+    "url_qualite": "email",
+    "url_pattern": "href=\"(https://fr\\.talent\\.com/redirect\\?id=[a-f0-9]+[^\"]{0,200})\"",
+    "url_notes": "Uniquement des liens de redirection tracking (redirect?id=12hexchars). Pas d'ID canonique extractible.",
+    "extractable": ["titre", "entreprise", "ville", "dept", "contrat"],
+    "notes": "Titre et localisation dans le texte entre les liens. L'ID du lien de redirection est court (12 hex) et temporaire — ne pas utiliser comme identifiant stable."
+  },
+
+  "france_travail": {
+    "description": "Alertes France Travail (offres publiées sur votre alerte)",
+    "folder": "france-travail",
+    "sender_domains": ["offre.francetravail.fr", "francetravail.fr"],
+    "sender_pattern": "nepasrepondre@offre.francetravail.fr",
+    "subject_hint": "nouvelles offres",
+    "offers_per_email": "3-9",
+    "id_field": "offre_id",
+    "id_pattern": "[Oo]ffre\\s+n°([A-Z0-9]+)",
+    "url_template": "https://candidat.francetravail.fr/offres/recherche/detail/{id}",
+    "url_qualite": "construite",
+    "extractable": ["titre", "entreprise", "ville", "dept", "contrat", "resume"],
+    "notes": "L'ID (ex: 208HNZK ou 2690552) apparaît sous chaque offre sous la forme 'Offre n°XXXXX'. Peut être alphanumérique ou purement numérique."
+  },
+
+  "jobijoba_alerte": {
+    "description": "Alertes Jobijoba — offres proposées par des entreprises",
+    "folder": "jobijoba",
+    "sender_domains": ["jobijoba.com"],
+    "sender_pattern": "contact@jobijoba.com",
+    "subject_hint": "vous proposent? des offres|nouvel emploi|recrutent",
+    "offers_per_email": "1-15",
+    "id_field": null,
+    "id_pattern": null,
+    "email_uuid_pattern": "emails\\.jobijoba\\.com/clic/([a-f0-9-]{36})/",
+    "url_template": null,
+    "url_qualite": "email",
+    "url_pattern": "href=\"(https://emails\\.jobijoba\\.com/clic/[a-f0-9-]{36}/\\d+/[a-f0-9]+/[^\"]+)\"",
+    "url_notes": "Redirections opaques emails.jobijoba.com/clic/{uuid}/{position}/{hash}/... — pas d'ID canonique.",
+    "title_pattern": "title=\"([^\"]+) - [\\w.\\-/_]+\\.[a-z]{2,}\"",
+    "source_platform_pattern": "title=\"[^\"]+ - ([\\w.\\-/_]+)\"",
+    "company_pattern": "color:#000000[^>]*>([^<]{2,60})</span>",
+    "city_pattern": "color:#000000[^>]*>[^<]+</span>\\s*-\\s*<span>([^<]{2,40})</span>",
+    "salary_min_pattern": "(\\d[\\d\\s]+)\\s*<span itemprop='salaryCurrency'>€</span>\\s*à",
+    "salary_max_pattern": "à\\s*(\\d[\\d\\s]+)\\s*<span itemprop='salaryCurrency'>€</span>\\s*par an",
+    "salary_period_pattern": "par (an|mois)",
+    "contract_pattern": "(CDI|CDD|Freelance|Alternance|Stage|Intérim)(?:</span>|\\s)",
+    "extractable": ["titre", "entreprise", "ville", "dept", "salaire", "contrat", "source_platform"],
+    "notes": "Jobijoba est un agrégateur — le champ source_platform (extrait du title attr) indique le site d'origine de l'offre (ex: hellowork.com, goldenbees.fr). À stocker dans Notes. Le salaire utilise des spans imbriqués pour le symbole €."
+  },
+
+  "jobijoba_digest": {
+    "description": "Digest Jobijoba (Les secteurs dynamiques de l'emploi)",
+    "folder": "jobijoba",
+    "sender_domains": ["jobijoba.com"],
+    "sender_pattern": "contact@jobijoba.com",
+    "subject_hint": "secteurs dynamiques",
+    "offers_per_email": "0",
+    "skip": true,
+    "notes": "Email de type newsletter sectorielle — pas d'offres individuelles. À ignorer."
+  },
+
+  "hellowork": {
+    "description": "Alertes HelloWork / emails de sociétés via HelloWork",
+    "folder": "hellowork",
+    "sender_domains": ["hellowork.com"],
+    "sender_pattern": null,
+    "subject_hint": null,
+    "offers_per_email": "?",
+    "id_field": null,
+    "id_pattern": null,
+    "url_template": null,
+    "url_qualite": "vide",
+    "extractable": [],
+    "notes": "Provider identifié via Message-ID @hellowork.com. Patterns de scraping à définir — dossier hellowork/ à créer dans sources/."
+  }
+}
