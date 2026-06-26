@@ -970,7 +970,6 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 "URL_qualite":      offer.get("url_qualite", "vide"),
                 "URL_redirect":     "",
                 "Stack":            stack,
-                "Statut":           "À traiter",
                 "Raison_exclusion": f"Blacklisté: {bl_term}" if bl_term else "",
                 "Date_candidature": "",
                 "Notes":            notes,

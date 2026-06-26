@@ -105,9 +105,6 @@ Providers supportés : France Travail, Indeed (alertes + match direct), LinkedIn
 | `Doublon_ID` | ID de la première occurrence si doublon |
 | `URL_qualite` | `construite` (stable) / `email` (lien tracking, peut expirer) / `vide` |
 | `Stack` | tags tech séparés par virgules |
-| `Statut` | voir valeurs ci-dessous |
-
-Valeurs `Statut` : `À traiter` · `Déjà vue` · `Hors stack` · `Hors profil` · `Hors zone géo` · `Expirée` · `Douteuse/Arnaque` · `Intéressante` · `Candidature envoyée` · `En cours` · `Entretien planifié` · `Offre reçue` · `Refusée` · `Abandonnée`
 
 ---
 
@@ -166,5 +163,4 @@ Valeurs `Statut` : `À traiter` · `Déjà vue` · `Hors stack` · `Hors profil`
 
 - **Trier par date** : colonne `Date_decouverte` en `YYYY-MM-DD` → tri alphabétique = tri chronologique
 - **Détecter les doublons** : mise en forme conditionnelle sur `Cle_dedup` → `=NB.SI($G:$G;G2)>1`
-- **Statut en couleur** : mise en forme conditionnelle sur `Statut` par valeur
-- **Filtre actif** : `Traite = FALSE` + `Statut = "À traiter"` → vue de travail quotidienne
+- **Filtre actif** : `Traite = FALSE` → vue de travail quotidienne

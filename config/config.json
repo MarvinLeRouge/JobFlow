@@ -19,13 +19,7 @@
     "ID", "Traite", "Date_decouverte", "Source", "Titre", "Entreprise",
     "Cle_dedup", "Doublon_ID", "Ville", "Dept", "Type_contrat",
     "Salaire_min", "Salaire_max", "URL", "URL_qualite", "URL_redirect", "Stack",
-    "Statut", "Raison_exclusion", "Date_candidature", "Notes"
-  ],
-  "statuts_offres": [
-    "À traiter", "Déjà vue", "Hors stack", "Hors profil",
-    "Hors zone géo", "Expirée", "Douteuse/Arnaque", "Intéressante",
-    "Candidature envoyée", "En cours", "Entretien planifié",
-    "Offre reçue", "Refusée", "Abandonnée"
+    "Raison_exclusion", "Date_candidature", "Notes"
   ],
   "url_qualite_values": ["construite", "email", "vide"],
   "statuts_candidature": [
@@ -195,6 +189,11 @@
     "nounou",
     "auxiliaire de vie",
     "aide à domicile",
-    "garde d'enfant"
+    "garde d'enfant",
+    "babysitter",
+    "mandataire immobilier",
+    "commercial immobilier",
+    "indépendant immobilier",
+    "néggociateur immobilier"
   ]
 }

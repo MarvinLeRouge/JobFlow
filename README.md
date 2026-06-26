@@ -107,7 +107,9 @@ La ligne est conservée dans le CSV et importée normalement dans Sheets.
 | Priorité | Couleur | Formule | Signification |
 |----------|---------|---------|---------------|
 | 1 (haute) | 🟡 Jaune | `=$H2<>""` | Doublon |
-| 2 | 🔴 Rouge | `=$S2<>""` | Blacklisté |
+| 2 | 🔴 Rouge | `=ISNUMBER(SEARCH("Blacklist";$T2))` | Blacklisté |
+
+> Colonnes de référence (après suppression de `Statut`) : A=ID, B=Traite, C=Date_decouverte, D=Source, E=Titre, F=Entreprise, G=Cle_dedup, H=Doublon_ID, I=Ville, J=Dept, K=Type_contrat, L=Salaire_min, M=Salaire_max, N=URL, O=URL_qualite, P=URL_redirect, Q=Stack, R=Raison_exclusion, S=Date_candidature, T=Notes
 
 ---
 
