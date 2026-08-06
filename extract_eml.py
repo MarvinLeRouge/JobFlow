@@ -4,7 +4,7 @@ extract_eml.py — Scraper principal : extrait les offres depuis les EML sources
 
 Usage : python3 extract_eml.py [--dry-run]
 
-- Lit logs/eml_index.csv  → fichiers à traiter (Statut_extraction = PENDING)
+- Lit logs/email_ledger.json → fichiers à traiter (statut_extraction = PENDING)
 - Détecte le provider     → config/scraping_patterns.json
 - Extrait les offres      → output/import_YYYYMMDD.csv  (fichier daté par run)
 - Dédup sur Cle_dedup     → Doublon_ID si doublon cross-provider
@@ -22,64 +22,81 @@ import csv
 import email
 import json
 import re
-import sys
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime
 from email import policy
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from ledger import load_ledger, save_ledger
+from providers import sender_domain
+
 # ── Chemins ───────────────────────────────────────────────────────────────────
 
-ROOT         = Path(__file__).parent
-CONFIG_DIR   = ROOT / "config"
-LOGS_DIR     = ROOT / "logs"
-OUTPUT_DIR   = ROOT / "output"
-SOURCES_DIR  = ROOT / "sources"
+ROOT = Path(__file__).parent
+CONFIG_DIR = ROOT / "config"
+LOGS_DIR = ROOT / "logs"
+OUTPUT_DIR = ROOT / "output"
+SOURCES_DIR = ROOT / "sources"
 
-CONFIG_FILE   = CONFIG_DIR / "config.json"
+CONFIG_FILE = CONFIG_DIR / "config.json"
 PATTERNS_FILE = CONFIG_DIR / "scraping_patterns.json"
-EML_INDEX     = LOGS_DIR / "eml_index.csv"
-OFFRES_CSV    = OUTPUT_DIR / "offres.csv"   # archive locale cumulative (référence dédup)
-HISTORY_CSV   = LOGS_DIR / "extraction_history.csv"
+LEDGER_FILE = LOGS_DIR / "email_ledger.json"
+OFFRES_CSV = OUTPUT_DIR / "offres.csv"  # archive locale cumulative (référence dédup)
+HISTORY_CSV = LOGS_DIR / "extraction_history.csv"
 # IMPORT_CSV est défini dans main() : output/import_YYYYMMDD.csv
-IMPORT_CSV    = None
+IMPORT_CSV = None
 
 LOCAL_TZ = ZoneInfo("Europe/Paris")
 
 # ── Chargement config ─────────────────────────────────────────────────────────
 
+
 def load_config():
     with CONFIG_FILE.open(encoding="utf-8") as f:
         return json.load(f)
+
 
 def load_patterns():
     with PATTERNS_FILE.open(encoding="utf-8") as f:
         return json.load(f)
 
+
 # ── Utilitaires texte ─────────────────────────────────────────────────────────
 
+
 def strip_accents(s: str) -> str:
-    return "".join(
-        c for c in unicodedata.normalize("NFD", s)
-        if unicodedata.category(c) != "Mn"
-    )
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
 
 def normalize(s: str) -> str:
     """Minuscule, sans accents, sans espaces/tirets → pour Cle_dedup."""
     return re.sub(r"[\s\-_/]+", "", strip_accents(s.lower()))
 
+
 def clean_entities(s: str) -> str:
     for ent, ch in [
-        ("&amp;", "&"), ("&nbsp;", " "), ("&#x27;", "'"), ("&#39;", "'"),
-        ("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'), ("&hellip;", "…"),
-        ("&middot;", "·"), ("&emsp;", " "), ("&#8202;", ""), ("&#8203;", ""),
-        ("&#8199;", ""), ("&#847;", ""), ("&shy;", ""), ("&#x3D;", "="),
+        ("&amp;", "&"),
+        ("&nbsp;", " "),
+        ("&#x27;", "'"),
+        ("&#39;", "'"),
+        ("&lt;", "<"),
+        ("&gt;", ">"),
+        ("&quot;", '"'),
+        ("&hellip;", "…"),
+        ("&middot;", "·"),
+        ("&emsp;", " "),
+        ("&#8202;", ""),
+        ("&#8203;", ""),
+        ("&#8199;", ""),
+        ("&#847;", ""),
+        ("&shy;", ""),
+        ("&#x3D;", "="),
     ]:
         s = s.replace(ent, ch)
     return s
+
 
 def clean_html(html: str) -> str:
     """HTML → texte brut lisible."""
@@ -89,12 +106,40 @@ def clean_html(html: str) -> str:
     t = clean_entities(t)
     return re.sub(r"\s+", " ", t).strip()
 
-TITRE_STOPWORDS = frozenset({
-    "le", "la", "les", "un", "une", "des", "du", "de", "d", "l",
-    "en", "et", "ou", "sur", "pour", "par", "avec", "sans", "au", "aux",
-    "ce", "cet", "cette", "ces",
-    "senior", "junior", "jr", "sr",
-})
+
+TITRE_STOPWORDS = frozenset(
+    {
+        "le",
+        "la",
+        "les",
+        "un",
+        "une",
+        "des",
+        "du",
+        "de",
+        "d",
+        "l",
+        "en",
+        "et",
+        "ou",
+        "sur",
+        "pour",
+        "par",
+        "avec",
+        "sans",
+        "au",
+        "aux",
+        "ce",
+        "cet",
+        "cette",
+        "ces",
+        "senior",
+        "junior",
+        "jr",
+        "sr",
+    }
+)
+
 
 def titre_slug(titre: str) -> str:
     """Slug de titre pour la clé de dédup : sans mots vides ni mentions H/F, tronqué à 25 chars."""
@@ -104,13 +149,16 @@ def titre_slug(titre: str) -> str:
     parts = [normalize(w) for w in words if normalize(w) not in TITRE_STOPWORDS]
     return "".join(parts)[:25]
 
+
 def build_cle_dedup(entreprise: str, ville: str, titre: str) -> str:
     e = normalize(entreprise) or "inconnu"
     v = normalize(ville) or "inconnue"
     t = titre_slug(titre) or "inconnu"
     return f"{e}|{v}|{t}"
 
+
 # ── Blacklist titres ──────────────────────────────────────────────────────────
+
 
 def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
     """Retourne le premier terme blacklisté trouvé dans le titre, ou None."""
@@ -125,7 +173,9 @@ def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
             return term
     return None
 
+
 # ── Stack keywords ────────────────────────────────────────────────────────────
+
 
 def extract_stack(text: str, keywords: dict) -> str:
     """Retourne les tags tech trouvés dans le texte, séparés par virgules."""
@@ -139,10 +189,12 @@ def extract_stack(text: str, keywords: dict) -> str:
                 break
     return ",".join(found)
 
+
 # ── Géolocalisation ───────────────────────────────────────────────────────────
 
 _nominatim_cache: dict = {}
 _last_nominatim_call: float = 0.0
+
 
 def get_dept(ville: str, ville_dept_map: dict) -> str:
     """Retourne le numéro de département depuis la ville."""
@@ -159,19 +211,20 @@ def get_dept(ville: str, ville_dept_map: dict) -> str:
     # Fallback Nominatim
     return _nominatim_dept(ville)
 
+
 def _nominatim_dept(ville: str) -> str:
     global _last_nominatim_call
     if ville in _nominatim_cache:
         return _nominatim_cache[ville]
     try:
         import requests
+
         elapsed = time.time() - _last_nominatim_call
         if elapsed < 1.1:
             time.sleep(1.1 - elapsed)
         r = requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": f"{ville}, France", "format": "json",
-                    "limit": 1, "addressdetails": 1},
+            params={"q": f"{ville}, France", "format": "json", "limit": 1, "addressdetails": 1},
             headers={"User-Agent": "job-search-tracker/1.0"},
             timeout=5,
         )
@@ -187,7 +240,9 @@ def _nominatim_dept(ville: str) -> str:
     _nominatim_cache[ville] = ""
     return ""
 
+
 # ── Parsing EML ───────────────────────────────────────────────────────────────
+
 
 def get_eml_parts(eml_path: Path):
     """Retourne (msg, html_body, text_body)."""
@@ -207,10 +262,6 @@ def get_eml_parts(eml_path: Path):
             text = decoded
     return msg, html, text
 
-def sender_domain(msg) -> str:
-    from_hdr = msg.get("From", "")
-    m = re.search(r"@([\w.\-]+)", from_hdr)
-    return m.group(1).lower() if m else ""
 
 def detect_provider(domain: str, patterns: dict) -> tuple[str, dict] | tuple[None, None]:
     """Retourne (provider_key, provider_config) ou (None, None).
@@ -226,28 +277,40 @@ def detect_provider(domain: str, patterns: dict) -> tuple[str, dict] | tuple[Non
             continue
         for d in p.get("sender_domains", []):
             d_parts = d.lower().split(".")
-            if parts[-len(d_parts):] == d_parts and len(d_parts) > best_specificity:
+            if parts[-len(d_parts) :] == d_parts and len(d_parts) > best_specificity:
                 best = (key, p)
                 best_specificity = len(d_parts)
     return best if best else (None, None)
 
+
 # ── Extracteurs par provider ──────────────────────────────────────────────────
+
 
 def _offer_base() -> dict:
     return {
-        "titre": "", "entreprise": "", "ville": "", "dept": "",
-        "type_contrat": "", "salaire_min": "", "salaire_max": "",
-        "url": "", "url_qualite": "vide", "notes": "",
+        "titre": "",
+        "entreprise": "",
+        "ville": "",
+        "dept": "",
+        "type_contrat": "",
+        "salaire_min": "",
+        "salaire_max": "",
+        "url": "",
+        "url_qualite": "vide",
+        "notes": "",
     }
+
 
 FT_OFFER_RE = re.compile(
     r'<a href="(https://candidat\.francetravail\.fr/offres/recherche/detail/([A-Z0-9]+))\?[^"]*"[^>]*>\s*'
-    r'<span[^>]*>\s*(.*?)\s*<br\s*/?>\s*(?:<!--.*?-->\s*)?'
-    r'(.*?)</span>\s*</a>',
-    re.S)
-FT_SPAN_RE = re.compile(r'<span[^>]*>([^<]*)</span>')
+    r"<span[^>]*>\s*(.*?)\s*<br\s*/?>\s*(?:<!--.*?-->\s*)?"
+    r"(.*?)</span>\s*</a>",
+    re.S,
+)
+FT_SPAN_RE = re.compile(r"<span[^>]*>([^<]*)</span>")
 FT_LOC_RE = re.compile(r"(\d{2})\s*-\s*(.+)")
 FT_CONTRAT_RE = re.compile(r"\b(CDI|CDD|Alternance|Stage|Freelance|Intérim|Apprentissage)\b", re.I)
+
 
 def extract_france_travail(html: str, msg, patterns: dict) -> list[dict]:
     """Chaque offre est un bloc <a href=".../detail/<ID>?..."> contenant le titre,
@@ -278,7 +341,7 @@ def extract_france_travail(html: str, msg, patterns: dict) -> list[dict]:
             if autres:
                 o["entreprise"] = autres[0]
 
-        contrat_m = FT_CONTRAT_RE.search(clean_html(html[m.end():m.end() + 600]))
+        contrat_m = FT_CONTRAT_RE.search(clean_html(html[m.end() : m.end() + 600]))
         if contrat_m:
             o["type_contrat"] = contrat_m.group(1)
 
@@ -290,14 +353,17 @@ def extract_france_travail(html: str, msg, patterns: dict) -> list[dict]:
 
 INDEED_ALERTE_BLOCK_RE = re.compile(
     r'<h2[^>]*>\s*<a href="([^"]+)"[^>]*>\s*([^<]{3,120}?)\s*</a>\s*</h2>(.*?)(?=<h2[^>]*>|\Z)',
-    re.S)
+    re.S,
+)
 # Nom de l'entreprise et lieu : deux <td> consécutifs partageant le même style
 # (couleur/taille/interligne), juste après le titre — la note (ex. <strong>4.7</strong>)
 # est dans un <td> de taille différente et n'est donc pas captée.
 INDEED_ALERTE_INFO_RE = re.compile(
     r'<td[^>]*style="[^"]*color:#2d2d2d;font-size:14px;line-height:21px[^"]*"[^>]*>\s*([^<]{1,100}?)\s*</td>',
-    re.S)
-INDEED_ALERTE_JK_RE = re.compile(r'jk=([a-f0-9]{16})')
+    re.S,
+)
+INDEED_ALERTE_JK_RE = re.compile(r"jk=([a-f0-9]{16})")
+
 
 def extract_indeed_alerte(html: str, msg, patterns: dict) -> list[dict]:
     """Chaque offre est un bloc <h2><a href="URL">TITRE</a></h2> suivi d'un tableau
@@ -344,8 +410,9 @@ def extract_indeed_alerte(html: str, msg, patterns: dict) -> list[dict]:
             else:
                 o["ville"] = lieu
 
-        contrat_m = re.search(r"\b(CDI|CDD|Alternance|Stage|Freelance|Intérim)\b",
-                               clean_html(body[:1500]), re.I)
+        contrat_m = re.search(
+            r"\b(CDI|CDD|Alternance|Stage|Freelance|Intérim)\b", clean_html(body[:1500]), re.I
+        )
         if contrat_m:
             o["type_contrat"] = contrat_m.group(1)
 
@@ -379,22 +446,24 @@ def extract_indeed_match(html: str, msg, patterns: dict) -> list[dict]:
     # de l'entreprise (elle apparaît aussi dans l'intro "Bonjour Jean...", sans lieu).
     if o["entreprise"]:
         for ent_m in re.finditer(re.escape(o["entreprise"]), text):
-            seg = text[ent_m.end():ent_m.end() + 160]
+            seg = text[ent_m.end() : ent_m.end() + 160]
             loc_m = re.match(
                 r"\s*(?:"
                 r"(\d{5})\s+([A-ZÀ-Ÿ][\wà-ÿÀ-Ÿ'\-]*(?:[\s\-][\wà-ÿÀ-Ÿ'\-]+)*?)"
                 r"(?=\s+(?:Salaire|Types? de postes?|Employeur réactif|Plusieurs postes))"
                 r"|([A-ZÀ-Ÿ][^()]{1,40}?)\s*\((\d{2})\)"
                 r"|(Télétravail)"
-                r")", seg)
+                r")",
+                seg,
+            )
             if loc_m:
-                if loc_m.group(1):          # "83000 Toulon"
+                if loc_m.group(1):  # "83000 Toulon"
                     o["ville"] = loc_m.group(2).strip()
                     o["dept"] = loc_m.group(1)[:2]
-                elif loc_m.group(3):        # "La Seyne-sur-Mer (83)"
+                elif loc_m.group(3):  # "La Seyne-sur-Mer (83)"
                     o["ville"] = loc_m.group(3).strip()
                     o["dept"] = loc_m.group(4)
-                else:                       # "Télétravail"
+                else:  # "Télétravail"
                     o["ville"] = "Télétravail"
                 break
 
@@ -431,15 +500,19 @@ def extract_linkedin(html: str, msg, patterns: dict) -> list[dict]:
         if idx >= 0:
             info_m = re.search(
                 r'<p[^>]*class="[^"]*line-clamp-1[^"]*"[^>]*>\s*([^<]+? · [^<]+?)\s*</p>',
-                html[idx:idx + 6000])
+                html[idx : idx + 6000],
+            )
             if info_m:
                 info = clean_entities(info_m.group(1)).strip()
                 company, _, lieu = info.partition(" · ")
                 o["entreprise"] = company.strip()
                 o["ville"] = re.sub(r"\s*\([^)]*\)\s*$", "", lieu).strip()
 
-        contrat_m = re.search(r"\b(CDI|CDD|Alternance|Stage|Freelance)\b",
-                               clean_html(html[max(0,idx-200):idx+500]) if idx >= 0 else "", re.I)
+        contrat_m = re.search(
+            r"\b(CDI|CDD|Alternance|Stage|Freelance)\b",
+            clean_html(html[max(0, idx - 200) : idx + 500]) if idx >= 0 else "",
+            re.I,
+        )
         if contrat_m:
             o["type_contrat"] = contrat_m.group(1)
 
@@ -460,9 +533,14 @@ def extract_meteojob_company(html: str, msg, patterns: dict) -> list[dict]:
     # URL de l'offre : lien CTA du modèle "Hot Offer" (https://www.meteojob.com/jobs/<id>?...),
     # avec repli sur l'ancienne URL canonique (slug + id) pour les anciens modèles d'e-mail.
     url_m = (
-        re.search(r'<a[^>]*class="hotoffer-cta-link"[^>]*href="(https://www\.meteojob\.com/jobs/\d+\?[^"]{0,400})"',
-                  html, re.S)
-        or re.search(r'href="(https://www\.meteojob\.com/candidat/offres/offre-d-emploi-[^"]+)"', html)
+        re.search(
+            r'<a[^>]*class="hotoffer-cta-link"[^>]*href="(https://www\.meteojob\.com/jobs/\d+\?[^"]{0,400})"',
+            html,
+            re.S,
+        )
+        or re.search(
+            r'href="(https://www\.meteojob\.com/candidat/offres/offre-d-emploi-[^"]+)"', html
+        )
         or re.search(r'href="(https://www\.meteojob\.com/jobs/\d+\?[^"]{0,400})"', html)
     )
     if url_m:
@@ -473,7 +551,7 @@ def extract_meteojob_company(html: str, msg, patterns: dict) -> list[dict]:
     text = clean_html(html)
     city_m = re.search(r"\bVar\s*\((\d{2})\)|\b([A-ZÀ-Ÿ][a-zà-ÿ\s\-]+)\s*\((\d{2})\)", text)
     if city_m:
-        if city_m.group(1):      # "Var (83)"
+        if city_m.group(1):  # "Var (83)"
             o["dept"] = city_m.group(1)
         elif city_m.group(3):
             o["ville"] = city_m.group(2).strip()
@@ -493,7 +571,8 @@ def extract_meteojob_company(html: str, msg, patterns: dict) -> list[dict]:
 # dernier token avant le guillemet fermant, même quand le titre contient lui-même " - ".
 JOBIJOBA_TITLE_RE = re.compile(r'title="(.+?) - ([^"\s]+)"')
 # Ville : premier <span> texte suivant la fermeture </strong> du titre.
-JOBIJOBA_VILLE_RE = re.compile(r'</strong>.*?<span>\s*([^<]{2,50}?)\s*</span>', re.S)
+JOBIJOBA_VILLE_RE = re.compile(r"</strong>.*?<span>\s*([^<]{2,50}?)\s*</span>", re.S)
+
 
 def extract_jobijoba(html: str, msg, patterns: dict) -> list[dict]:
     offers = []
@@ -506,7 +585,7 @@ def extract_jobijoba(html: str, msg, patterns: dict) -> list[dict]:
             continue
 
         block_end = title_matches[i + 1].start() if i + 1 < len(title_matches) else len(html)
-        block = html[title_m.start():block_end]
+        block = html[title_m.start() : block_end]
 
         o = _offer_base()
         o["titre"] = titre
@@ -518,7 +597,9 @@ def extract_jobijoba(html: str, msg, patterns: dict) -> list[dict]:
         # (décalage d'un cran) — on cherche ici le dernier lien clic/ rencontré
         # AVANT le titre, qui correspond à l'ouverture de SA propre carte.
         url_m = None
-        for cm in re.finditer(r'<a[^>]*href="(https://emails\.jobijoba\.com/clic/[^"]+)"', html[:title_m.start()]):
+        for cm in re.finditer(
+            r'<a[^>]*href="(https://emails\.jobijoba\.com/clic/[^"]+)"', html[: title_m.start()]
+        ):
             url_m = cm
         if url_m:
             o["url"] = url_m.group(1)
@@ -542,7 +623,8 @@ def extract_jobijoba(html: str, msg, patterns: dict) -> list[dict]:
         sal_m = re.search(
             r"(\d[\d\s]+)\s*<span itemprop=['\"]salaryCurrency['\"]>€</span>\s*à\s*"
             r"(\d[\d\s]+)\s*<span itemprop=['\"]salaryCurrency['\"]>€</span>\s*(par an|par mois)",
-            block)
+            block,
+        )
         if sal_m:
             factor = 12 if sal_m.group(3) == "par mois" else 1
             try:
@@ -551,8 +633,9 @@ def extract_jobijoba(html: str, msg, patterns: dict) -> list[dict]:
             except ValueError:
                 pass
 
-        contrat_m = re.search(r"\b(CDI|CDD|Alternance|Stage|Freelance|Indépendant|Intérim)\b",
-                               text_block, re.I)
+        contrat_m = re.search(
+            r"\b(CDI|CDD|Alternance|Stage|Freelance|Indépendant|Intérim)\b", text_block, re.I
+        )
         if contrat_m:
             o["type_contrat"] = contrat_m.group(1)
 
@@ -595,22 +678,25 @@ TALENT_COM_FOOTER_TITLES = {
 # Lien de redirection propre à une offre, imbriqué dans l'attribut href
 # de la balise <a> du titre elle-même.
 TALENT_COM_REDIRECT_RE = re.compile(
-    r'href="(https://fr\.talent\.com/redirect\?id(?:=|&#x3D;)[a-f0-9]+[^"]{0,600})"')
+    r'href="(https://fr\.talent\.com/redirect\?id(?:=|&#x3D;)[a-f0-9]+[^"]{0,600})"'
+)
 
 # Lieu ("Ville, Région, Pays") puis entreprise, dans deux <td> de couleurs fixes
 # juste après le lien du titre. Le <td> entreprise est parfois vide : Talent.com
 # relaie aussi des annonces d'agences/agrégateurs qui ne communiquent pas l'employeur.
 TALENT_COM_INFO_RE = re.compile(
     r'<td[^>]*style="[^"]*color:\s*#691f74[^"]*"[^>]*>\s*([^<]{1,150}?)\s*</td>\s*'
-    r'.*?'
+    r".*?"
     r'<td[^>]*style="[^"]*color:\s*#30183f[^"]*"[^>]*>\s*([^<]{0,150}?)\s*</td>',
-    re.S)
+    re.S,
+)
+
 
 def extract_talent_com(html: str, msg, patterns: dict) -> list[dict]:
     offers = []
 
     # Talent.com : titre en hyperlien (span ou a), suivi ville, entreprise
-    title_iter = list(re.finditer(r'<a[^>]+talent\.com[^>]*>([^<]{5,100})</a>', html))
+    title_iter = list(re.finditer(r"<a[^>]+talent\.com[^>]*>([^<]{5,100})</a>", html))
 
     for idx, title_m in enumerate(title_iter[:20]):
         titre = clean_entities(title_m.group(1)).strip()
@@ -629,7 +715,7 @@ def extract_talent_com(html: str, msg, patterns: dict) -> list[dict]:
             o["url"] = clean_entities(url_m.group(1))
             o["url_qualite"] = "email"
 
-        info_m = TALENT_COM_INFO_RE.search(html[title_m.end():title_m.end() + 2000])
+        info_m = TALENT_COM_INFO_RE.search(html[title_m.end() : title_m.end() + 2000])
         if info_m:
             lieu = clean_entities(info_m.group(1)).strip()
             o["ville"] = lieu.split(",")[0].strip()
@@ -640,8 +726,7 @@ def extract_talent_com(html: str, msg, patterns: dict) -> list[dict]:
         # Le type de contrat apparaît dans le titre lui-même (ex. "CDI – ...",
         # "MAINTENANCE TECHNIQUE H/F - CDD"), pas ailleurs dans l'e-mail —
         # une recherche globale mélangerait les contrats entre offres.
-        contrat_m = re.search(r"\b(CDI|CDD|Alternance|Stage|Freelance|Indépendant)\b",
-                               titre, re.I)
+        contrat_m = re.search(r"\b(CDI|CDD|Alternance|Stage|Freelance|Indépendant)\b", titre, re.I)
         if contrat_m:
             o["type_contrat"] = contrat_m.group(1)
         offers.append(o)
@@ -650,19 +735,20 @@ def extract_talent_com(html: str, msg, patterns: dict) -> list[dict]:
 
 # Dispatch table
 EXTRACTORS = {
-    "france_travail":    extract_france_travail,
-    "indeed_alerte":     extract_indeed_alerte,
-    "indeed_match":      extract_indeed_match,
-    "linkedin":          extract_linkedin,
-    "meteojob_company":  extract_meteojob_company,
-    "meteojob_digest":   None,  # skip
-    "jobijoba_alerte":   extract_jobijoba,
-    "jobijoba_digest":   None,  # skip
-    "talent_com":        extract_talent_com,
-    "hellowork":         None,  # patterns à définir
+    "france_travail": extract_france_travail,
+    "indeed_alerte": extract_indeed_alerte,
+    "indeed_match": extract_indeed_match,
+    "linkedin": extract_linkedin,
+    "meteojob_company": extract_meteojob_company,
+    "meteojob_digest": None,  # skip
+    "jobijoba_alerte": extract_jobijoba,
+    "jobijoba_digest": None,  # skip
+    "talent_com": extract_talent_com,
+    "hellowork": None,  # patterns à définir
 }
 
 # ── Gestion CSV ───────────────────────────────────────────────────────────────
+
 
 def load_dedup_map() -> tuple[dict, int]:
     """Retourne ({cle_dedup: id}, max_e_number) depuis offres.csv."""
@@ -683,9 +769,11 @@ def load_dedup_map() -> tuple[dict, int]:
                     pass
     return dedup, max_e
 
+
 def has_prior_imports() -> bool:
     """Retourne True si au moins un fichier import_*.csv existe déjà dans output/."""
     return any(OUTPUT_DIR.glob("import_*.csv"))
+
 
 def ensure_offres_csv(headers: list, write_import_headers: bool):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -699,41 +787,21 @@ def ensure_offres_csv(headers: list, write_import_headers: bool):
                 csv.writer(f, delimiter=";").writerow(headers)
             # sinon fichier vide — les données seront appendées sans en-tête
 
+
 def append_offres(rows: list[dict], headers: list):
     # Archive locale cumulative (pour la déduplication)
     with OFFRES_CSV.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=headers, delimiter=";",
-                                extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", extrasaction="ignore")
         writer.writerows(rows)
     # Fichier d'import daté (nouvelles lignes du run → à importer dans Sheets)
     if IMPORT_CSV:
         with IMPORT_CSV.open("a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers, delimiter=";",
-                                    extrasaction="ignore")
+            writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", extrasaction="ignore")
             writer.writerows(rows)
 
-# ── Gestion index EML ─────────────────────────────────────────────────────────
-
-def load_eml_index() -> list[dict]:
-    if not EML_INDEX.exists():
-        return []
-    with EML_INDEX.open(newline="", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f, delimiter=";"))
-    for row in rows:
-        if "Statut_extraction" not in row:
-            row["Statut_extraction"] = "PENDING"
-    return rows
-
-def save_eml_index(rows: list[dict]):
-    if not rows:
-        return
-    fieldnames = list(rows[0].keys())
-    with EML_INDEX.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-        writer.writeheader()
-        writer.writerows(rows)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
+
 
 def write_run_log(run_dt: datetime, entries: list[str], stats: dict, log_path: Path):
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -745,26 +813,38 @@ def write_run_log(run_dt: datetime, entries: list[str], stats: dict, log_path: P
         for k, v in stats.items():
             f.write(f"  {k}: {v}\n")
 
+
 def append_history(run_dt: datetime, stats: dict):
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    fields = ["Date_run", "Fichiers_traites", "Offres_extraites",
-              "Doublons", "Ignores", "Erreurs", "Dry_run"]
+    fields = [
+        "Date_run",
+        "Fichiers_traites",
+        "Offres_extraites",
+        "Doublons",
+        "Ignores",
+        "Erreurs",
+        "Dry_run",
+    ]
     exists = HISTORY_CSV.exists()
     with HISTORY_CSV.open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, delimiter=";")
         if not exists:
             writer.writeheader()
-        writer.writerow({
-            "Date_run":         run_dt.strftime("%Y-%m-%dT%H:%M:%S"),
-            "Fichiers_traites": stats.get("fichiers_ok", 0),
-            "Offres_extraites": stats.get("offres_ecrites", 0),
-            "Doublons":         stats.get("doublons", 0),
-            "Ignores":          stats.get("ignores", 0),
-            "Erreurs":          stats.get("erreurs", 0),
-            "Dry_run":          stats.get("dry_run", False),
-        })
+        writer.writerow(
+            {
+                "Date_run": run_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                "Fichiers_traites": stats.get("fichiers_ok", 0),
+                "Offres_extraites": stats.get("offres_ecrites", 0),
+                "Doublons": stats.get("doublons", 0),
+                "Ignores": stats.get("ignores", 0),
+                "Erreurs": stats.get("erreurs", 0),
+                "Dry_run": stats.get("dry_run", False),
+            }
+        )
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main(dry_run: bool, force_headers: bool | None = None):
     """
@@ -778,38 +858,40 @@ def main(dry_run: bool, force_headers: bool | None = None):
     log_path = LOGS_DIR / f"{run_dt.strftime('%Y%m%d-%H%M')}_extraction.log"
     log_entries: list[str] = []
 
-    # Fichier d'import daté pour ce run
     if not dry_run:
         IMPORT_CSV = OUTPUT_DIR / f"import_{run_dt.strftime('%Y%m%d')}.csv"
 
-    # Décision headers
     if force_headers is None:
         write_import_headers = not has_prior_imports()
-        headers_reason = "auto (aucun import existant)" if write_import_headers \
-                         else "auto (imports existants détectés)"
+        headers_reason = (
+            "auto (aucun import existant)"
+            if write_import_headers
+            else "auto (imports existants détectés)"
+        )
     else:
         write_import_headers = force_headers
-        headers_reason = "forcé via --with-headers" if force_headers \
-                         else "forcé via --no-headers"
+        headers_reason = "forcé via --with-headers" if force_headers else "forcé via --no-headers"
 
     def log(msg: str, level: str = "INFO"):
         prefix = {"INFO": "  ", "WARN": "⚠ ", "ERR ": "✗ ", "IGN ": "— "}
         log_entries.append(f"[{level}] {msg}")
         print(prefix.get(level, "  ") + msg)
 
-    # Chargement config
-    config     = load_config()
-    patterns   = load_patterns()
-    headers    = config["offres_csv_headers"]
-    keywords   = config["stack_keywords"]
-    blacklist  = config.get("blacklist_titres", [])
+    config = load_config()
+    patterns = load_patterns()
+    headers = config["offres_csv_headers"]
+    keywords = config["stack_keywords"]
+    blacklist = config.get("blacklist_titres", [])
     ville_dept = {k.lower(): v for k, v in config["ville_dept"].items()}
 
-    # État initial
-    eml_rows = load_eml_index()
-    pending  = sorted(
-        [r for r in eml_rows if r.get("Statut_extraction", "PENDING") == "PENDING"],
-        key=lambda r: r.get("Date_email", ""),
+    ledger = load_ledger(LEDGER_FILE)
+    pending = sorted(
+        (
+            mid
+            for mid, entry in ledger.items()
+            if entry.get("statut_extraction", "PENDING") == "PENDING"
+        ),
+        key=lambda mid: ledger[mid].get("date_email", ""),
     )
 
     if not pending:
@@ -819,9 +901,16 @@ def main(dry_run: bool, force_headers: bool | None = None):
     dedup_map, max_e_id = load_dedup_map()
     ensure_offres_csv(headers, write_import_headers)
 
-    stats = {"fichiers_ok": 0, "fichiers_partiel": 0, "erreurs": 0,
-             "ignores": 0, "offres_ecrites": 0, "doublons": 0,
-             "blacklistes": 0, "dry_run": dry_run}
+    stats = {
+        "fichiers_ok": 0,
+        "fichiers_partiel": 0,
+        "erreurs": 0,
+        "ignores": 0,
+        "offres_ecrites": 0,
+        "doublons": 0,
+        "blacklistes": 0,
+        "dry_run": dry_run,
+    }
 
     total = len(pending)
     headers_label = f"{'avec' if write_import_headers else 'sans'} en-tête ({headers_reason})"
@@ -830,81 +919,74 @@ def main(dry_run: bool, force_headers: bool | None = None):
         print(f"  → {IMPORT_CSV.name}  [{headers_label}]")
     print()
 
-    for idx, eml_row in enumerate(pending, 1):
-        rel_path = eml_row.get("Fichier", "")
+    for idx, message_id in enumerate(pending, 1):
+        entry = ledger[message_id]
+        rel_path = entry.get("fichier", "")
         eml_path = SOURCES_DIR / rel_path
-        date_email = eml_row.get("Date_email", "")[:10]  # YYYY-MM-DD
+        date_email = entry.get("date_email", "")[:10]
 
-        # Progression
         pct = idx / total * 100
         print(f"[{idx}/{total} — {pct:.0f}%] {rel_path}")
 
         if not eml_path.exists():
             log(f"Fichier introuvable : {eml_path}", "ERR ")
-            eml_row["Statut_extraction"] = "ERREUR"
+            entry["statut_extraction"] = "ERREUR"
             stats["erreurs"] += 1
             continue
 
-        # Parser l'EML
         try:
             msg, html, _text = get_eml_parts(eml_path)
         except Exception as e:
             log(f"Impossible de lire {rel_path} : {e}", "ERR ")
-            eml_row["Statut_extraction"] = "ERREUR"
+            entry["statut_extraction"] = "ERREUR"
             stats["erreurs"] += 1
             continue
 
-        # Détecter le provider
-        domain = sender_domain(msg)
+        domain = sender_domain(msg.get("From", ""))
         provider_key, provider_cfg = detect_provider(domain, patterns)
 
         if provider_key is None:
             log(f"Provider inconnu (domaine: {domain}) — {rel_path}", "WARN")
-            eml_row["Statut_extraction"] = "ERREUR"
+            entry["statut_extraction"] = "ERREUR"
             stats["erreurs"] += 1
             continue
 
-        # Skip explicite
         if provider_cfg.get("skip"):
             log(f"EML ignoré [{provider_key}] : {rel_path}", "IGN ")
-            eml_row["Statut_extraction"] = "IGNORE"
+            entry["statut_extraction"] = "IGNORE"
             stats["ignores"] += 1
             continue
 
-        # Vérifier si c'est un email de type "inconnu" (ex: suivi candidature)
         extractor = EXTRACTORS.get(provider_key)
         if extractor is None:
             log(f"EML ignoré [pas d'extracteur pour {provider_key}] : {rel_path}", "IGN ")
-            eml_row["Statut_extraction"] = "IGNORE"
+            entry["statut_extraction"] = "IGNORE"
             stats["ignores"] += 1
             continue
 
-        # Extraire les offres
         try:
             raw_offers = extractor(html, msg, provider_cfg)
         except Exception as e:
             log(f"Erreur d'extraction [{provider_key}] {rel_path} : {e}", "ERR ")
-            eml_row["Statut_extraction"] = "ERREUR"
+            entry["statut_extraction"] = "ERREUR"
             stats["erreurs"] += 1
             continue
 
         if not raw_offers:
-            # 0 offres sur un provider non-skip → signaler clairement
             log(f"Aucune offre extraite [{provider_key}] : {rel_path}", "WARN")
             log(f"  → Sujet : {msg.get('Subject', '?')[:80]}", "WARN")
-            eml_row["Statut_extraction"] = "PARTIEL"
+            entry["statut_extraction"] = "PARTIEL"
             stats["fichiers_partiel"] += 1
             continue
 
-        # Construire les lignes CSV
         source_display = {
-            "france_travail":   "France Travail",
-            "indeed_alerte":    "Indeed",
-            "indeed_match":     "Indeed",
-            "linkedin":         "LinkedIn",
+            "france_travail": "France Travail",
+            "indeed_alerte": "Indeed",
+            "indeed_match": "Indeed",
+            "linkedin": "LinkedIn",
             "meteojob_company": "Meteojob",
-            "jobijoba_alerte":  "Jobijoba",
-            "talent_com":       "Talent.com",
+            "jobijoba_alerte": "Jobijoba",
+            "talent_com": "Talent.com",
         }.get(provider_key, provider_key)
 
         new_rows = []
@@ -919,22 +1001,18 @@ def main(dry_run: bool, force_headers: bool | None = None):
             max_e_id += 1
             eid = f"E{max_e_id:06d}"
 
-            # Dept depuis config ou Nominatim
             if not offer.get("dept") and offer.get("ville"):
                 offer["dept"] = get_dept(offer["ville"], ville_dept)
 
-            # Stack
             search_text = offer["titre"] + " " + offer.get("notes", "")
             stack = extract_stack(search_text, keywords)
 
-            # Cle_dedup
             cle = build_cle_dedup(
                 offer.get("entreprise", ""),
                 offer.get("ville", ""),
                 offer["titre"],
             )
 
-            # Dédup
             doublon_id = ""
             if cle in dedup_map:
                 doublon_id = dedup_map[cle]
@@ -945,7 +1023,6 @@ def main(dry_run: bool, force_headers: bool | None = None):
 
             notes = offer.get("notes", "")
 
-            # Blacklist
             bl_term = is_blacklisted(offer["titre"], blacklist)
             if bl_term:
                 stats["blacklistes"] += 1
@@ -953,26 +1030,27 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 notes = f"{notes} | {marker}" if notes else marker
 
             row = {
-                "ID":               eid,
-                "Traite":           "FALSE",
-                "Date_decouverte":  date_email,
-                "Source":           source_display,
-                "Titre":            offer["titre"],
-                "Entreprise":       offer.get("entreprise", ""),
-                "Cle_dedup":        cle,
-                "Doublon_ID":       doublon_id,
-                "Ville":            offer.get("ville", ""),
-                "Dept":             offer.get("dept", ""),
-                "Type_contrat":     offer.get("type_contrat", ""),
-                "Salaire_min":      offer.get("salaire_min", ""),
-                "Salaire_max":      offer.get("salaire_max", ""),
-                "URL":              offer.get("url", ""),
-                "URL_qualite":      offer.get("url_qualite", "vide"),
-                "URL_redirect":     "",
-                "Stack":            stack,
+                "ID": eid,
+                "Traite": "FALSE",
+                "Date_decouverte": date_email,
+                "Source": source_display,
+                "Titre": offer["titre"],
+                "Entreprise": offer.get("entreprise", ""),
+                "Cle_dedup": cle,
+                "Doublon_ID": doublon_id,
+                "Ville": offer.get("ville", ""),
+                "Dept": offer.get("dept", ""),
+                "Type_contrat": offer.get("type_contrat", ""),
+                "Salaire_min": offer.get("salaire_min", ""),
+                "Salaire_max": offer.get("salaire_max", ""),
+                "URL": offer.get("url", ""),
+                "URL_qualite": offer.get("url_qualite", "vide"),
+                "URL_redirect": "",
+                "Stack": stack,
                 "Raison_exclusion": f"Blacklisté: {bl_term}" if bl_term else "",
                 "Date_candidature": "",
-                "Notes":            notes,
+                "Notes": notes,
+                "Message_ID": message_id,
             }
             new_rows.append(row)
 
@@ -984,7 +1062,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
         stats["offres_ecrites"] += nb_ok
 
         statut = "OK" if nb_err == 0 else "PARTIEL"
-        eml_row["Statut_extraction"] = statut
+        entry["statut_extraction"] = statut
 
         if statut == "OK":
             stats["fichiers_ok"] += 1
@@ -993,11 +1071,9 @@ def main(dry_run: bool, force_headers: bool | None = None):
             stats["fichiers_partiel"] += 1
             log(f"  {nb_ok} offre(s) OK, {nb_err} ignorée(s)", "WARN")
 
-    # Sauvegarder l'index mis à jour
     if not dry_run:
-        save_eml_index(eml_rows)
+        save_ledger(LEDGER_FILE, ledger)
 
-    # Rapport final
     print(f"\n{'='*55}")
     print(f"{'[DRY-RUN] ' if dry_run else ''}RAPPORT DE RUN — {run_dt.strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*55}")
@@ -1012,7 +1088,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
         print(f"\n  ⚠  Détails dans : {log_path.name}")
     if not dry_run and IMPORT_CSV and stats["offres_ecrites"] > 0:
         print(f"\n  → À importer dans Google Sheets : {IMPORT_CSV.name}")
-        print(f"     Données → Importer → Ajouter aux données actuelles")
+        print("     Données → Importer → Ajouter aux données actuelles")
     print(f"{'='*55}\n")
 
     if not dry_run:
@@ -1021,15 +1097,23 @@ def main(dry_run: bool, force_headers: bool | None = None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Simule l'extraction sans écrire de fichiers")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Simule l'extraction sans écrire de fichiers"
+    )
     hdr = parser.add_mutually_exclusive_group()
-    hdr.add_argument("--with-headers", action="store_true",
-                     help="Forcer la présence de l'en-tête dans le fichier import")
-    hdr.add_argument("--no-headers", action="store_true",
-                     help="Forcer l'absence de l'en-tête dans le fichier import")
+    hdr.add_argument(
+        "--with-headers",
+        action="store_true",
+        help="Forcer la présence de l'en-tête dans le fichier import",
+    )
+    hdr.add_argument(
+        "--no-headers",
+        action="store_true",
+        help="Forcer l'absence de l'en-tête dans le fichier import",
+    )
     args = parser.parse_args()
 
     force_headers = None
