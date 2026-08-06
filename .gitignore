@@ -2,3 +2,12 @@ logs/
 sources/
 output/
 archive/
+
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+token.json
+credentials.json
+client_secret*.json
