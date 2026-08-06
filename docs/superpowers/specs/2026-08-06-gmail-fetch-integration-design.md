@@ -70,8 +70,11 @@ rows on each load):
 }
 ```
 
-`gmail_id` is empty/absent for historical entries migrated from
-`eml_index.csv` (those emails were never fetched via the API).
+`gmail_id` is set to the explicit sentinel value `"before_gmail_api"` for
+historical entries migrated from `eml_index.csv` (those emails were never
+fetched via the API) — a real value rather than empty/null, so "no Gmail
+ID because this predates the API integration" is distinguishable at a
+glance from a future bug that fails to populate the field.
 
 ### `offres.csv` — traceability
 
@@ -131,8 +134,8 @@ found/downloaded, renamed/duplicates, offers written/duplicates/blacklisted).
 
 Converts existing `logs/eml_index.csv` (~900 rows) into
 `email_ledger.json`, preserving `Statut_extraction`, `Fichier`,
-`Date_email`, `Date_indexation`; `gmail_id` left empty for all migrated
-rows. Also adds the empty `Message_ID` column to the existing
+`Date_email`, `Date_indexation`; `gmail_id` set to `"before_gmail_api"` for
+all migrated rows. Also adds the empty `Message_ID` column to the existing
 `output/offres.csv` (~1300+ rows).
 
 ## Authentication (handled separately, step-by-step)
@@ -182,7 +185,8 @@ matching the user's usual Python setup:
   Gmail API calls — responses mocked via `unittest.mock`.
 - `tests/test_ledger_migration.py` — conversion from `eml_index.csv`,
   including rows missing `Statut_extraction` (mirrors the existing
-  migration fallback already present in `load_index()`).
+  migration fallback already present in `load_index()`), and asserting
+  every migrated row gets `gmail_id == "before_gmail_api"`.
 - Coverage target: happy path + edge cases per each component (empty
   sender list, empty ledger, multi-page pagination, missing/malformed
   fields) — no error-state testing for scenarios that cannot occur (e.g.
