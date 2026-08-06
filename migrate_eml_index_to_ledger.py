@@ -2,7 +2,7 @@
 """One-shot migration: converts logs/eml_index.csv into logs/email_ledger.json.
 
 Run once, after upgrading to the unified ledger. Does not delete the old
-eml_index.csv — remove it manually once you've confirmed the migration.
+eml_index.csv, remove it manually once you've confirmed the migration.
 
 Usage:
     python3 migrate_eml_index_to_ledger.py [--dry-run]
@@ -54,7 +54,7 @@ def main(dry_run: bool) -> None:
         raise SystemExit(1)
     save_ledger(LEDGER_JSON, ledger)
     print(f"Ledger écrit : {LEDGER_JSON}")
-    print(f"NOTE : {INDEX_CSV} n'a pas été supprimé — à retirer manuellement une fois vérifié.")
+    print(f"NOTE : {INDEX_CSV} n'a pas été supprimé, à retirer manuellement une fois vérifié.")
 
 
 if __name__ == "__main__":
