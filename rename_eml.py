@@ -22,81 +22,42 @@ Comportement (sans --check) :
 import argparse
 import csv
 import email
-import json
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email import policy
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-SOURCES_DIR    = Path(__file__).parent / "sources"
-LOGS_DIR       = Path(__file__).parent / "logs"
-CONFIG_DIR     = Path(__file__).parent / "config"
-INDEX_FILE     = LOGS_DIR / "eml_index.csv"
-PATTERNS_FILE  = CONFIG_DIR / "scraping_patterns.json"
-DUPES_DIR      = SOURCES_DIR / "_duplicates"
-TESTS_DIR      = SOURCES_DIR / "tests"
-LOCAL_TZ       = ZoneInfo("Europe/Paris")
+from providers import expected_folder, load_domain_map, sender_domain
+
+SOURCES_DIR = Path(__file__).parent / "sources"
+LOGS_DIR = Path(__file__).parent / "logs"
+CONFIG_DIR = Path(__file__).parent / "config"
+INDEX_FILE = LOGS_DIR / "eml_index.csv"
+PATTERNS_FILE = CONFIG_DIR / "scraping_patterns.json"
+DUPES_DIR = SOURCES_DIR / "_duplicates"
+TESTS_DIR = SOURCES_DIR / "tests"
+LOCAL_TZ = ZoneInfo("Europe/Paris")
 DATE_PREFIX_RE = re.compile(r"^\d{8}-\d{4}-")
-INDEX_FIELDS   = ["Message-ID", "Fichier", "Date_email", "Date_indexation", "Statut_extraction"]
-
-
-# ── Config helpers ────────────────────────────────────────────────────────────
-
-def load_domain_map() -> dict:
-    """
-    Construit {sender_domain: expected_folder} depuis scraping_patterns.json.
-    Ex: {"jobalert.indeed.com": "indeed", "meteojob.com": "meteojob", ...}
-    """
-    if not PATTERNS_FILE.exists():
-        return {}
-    with PATTERNS_FILE.open(encoding="utf-8") as f:
-        patterns = json.load(f)
-    mapping = {}
-    for key, p in patterns.items():
-        if key.startswith("_"):
-            continue
-        folder = p.get("folder")
-        for domain in p.get("sender_domains", []):
-            if domain and folder:
-                mapping[domain.lower()] = folder
-    return mapping
-
-
-def sender_domain(from_header: str) -> str:
-    """Extrait le domaine depuis un header From: (ex: 'Foo <bar@baz.com>' → 'baz.com')."""
-    match = re.search(r"@([\w.\-]+)", from_header or "")
-    return match.group(1).lower() if match else ""
-
-
-def expected_folder(domain: str, domain_map: dict) -> str | None:
-    """
-    Cherche le dossier attendu pour ce domaine.
-    Teste d'abord le domaine complet, puis les suffixes parents
-    (ex: 'jobalert.indeed.com' → 'indeed.com' → 'com').
-    """
-    parts = domain.split(".")
-    for i in range(len(parts)):
-        candidate = ".".join(parts[i:])
-        if candidate in domain_map:
-            return domain_map[candidate]
-    return None
+INDEX_FIELDS = ["Message-ID", "Fichier", "Date_email", "Date_indexation", "Statut_extraction"]
 
 
 # ── Check ─────────────────────────────────────────────────────────────────────
 
+
 def check_folders():
     """Vérifie que chaque EML est dans le bon dossier provider. Lecture seule."""
-    domain_map = load_domain_map()
+    domain_map = load_domain_map(PATTERNS_FILE)
     if not domain_map:
         print("Aucun mapping domaine→dossier trouvé dans scraping_patterns.json.", file=sys.stderr)
         return
 
     eml_files = sorted(
-        f for f in SOURCES_DIR.rglob("*.eml")
+        f
+        for f in SOURCES_DIR.rglob("*.eml")
         if DUPES_DIR not in f.parents and TESTS_DIR not in f.parents
     )
 
@@ -106,7 +67,7 @@ def check_folders():
 
     ok = mismatches = unknown = 0
     mismatch_list = []
-    unknown_list  = []
+    unknown_list = []
 
     for eml_path in eml_files:
         actual_folder = eml_path.parent.name
@@ -118,7 +79,7 @@ def check_folders():
             print(f"  ERREUR lecture ({eml_path.name}): {e}", file=sys.stderr)
             continue
 
-        domain  = sender_domain(from_hdr)
+        domain = sender_domain(from_hdr)
         exp_fld = expected_folder(domain, domain_map)
 
         if exp_fld is None:
@@ -128,12 +89,14 @@ def check_folders():
             ok += 1
         else:
             mismatches += 1
-            mismatch_list.append((
-                str(eml_path.relative_to(SOURCES_DIR)),
-                actual_folder,
-                exp_fld,
-                domain,
-            ))
+            mismatch_list.append(
+                (
+                    str(eml_path.relative_to(SOURCES_DIR)),
+                    actual_folder,
+                    exp_fld,
+                    domain,
+                )
+            )
 
     print(f"Vérification de {len(eml_files)} fichier(s)\n")
 
@@ -157,6 +120,7 @@ def check_folders():
 
 
 # ── Index helpers ─────────────────────────────────────────────────────────────
+
 
 def load_index() -> dict:
     """Retourne un dict {message_id: row} depuis eml_index.csv.
@@ -182,6 +146,7 @@ def save_index(index: dict):
 
 
 # ── EML helpers ───────────────────────────────────────────────────────────────
+
 
 def parse_headers(eml_path: Path):
     """Retourne (message_id, datetime) depuis les headers de l'EML, ou (None, None)."""
@@ -212,14 +177,16 @@ def resolve_collision(base_path: Path, dt, stem: str) -> Path:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(dry_run: bool, purge: bool):
 
+def run(dry_run: bool, purge: bool):
     if purge:
         if not DUPES_DIR.exists() or not any(DUPES_DIR.iterdir()):
             print("sources/_duplicates/ est vide ou absent — rien à purger.")
             return
         files = sorted(DUPES_DIR.iterdir())
-        print(f"{'[DRY-RUN] ' if dry_run else ''}Purge de {len(files)} fichier(s) dans _duplicates/")
+        print(
+            f"{'[DRY-RUN] ' if dry_run else ''}Purge de {len(files)} fichier(s) dans _duplicates/"
+        )
         for f in files:
             print(f"  DEL {f.name}")
             if not dry_run:
@@ -229,7 +196,8 @@ def run(dry_run: bool, purge: bool):
         return
 
     eml_files = sorted(
-        f for f in SOURCES_DIR.rglob("*.eml")
+        f
+        for f in SOURCES_DIR.rglob("*.eml")
         if DUPES_DIR not in f.parents and TESTS_DIR not in f.parents
     )
 
@@ -241,7 +209,7 @@ def run(dry_run: bool, purge: bool):
     print(f"{tag}{len(eml_files)} fichier(s) .eml trouvé(s)\n")
 
     index = load_index()
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_str = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     renamed = duped = skipped = errors = 0
 
@@ -298,7 +266,7 @@ def run(dry_run: bool, purge: bool):
             continue
 
         new_path = resolve_collision(eml_path, dt, eml_path.stem)
-        rel_new  = new_path.relative_to(SOURCES_DIR)
+        rel_new = new_path.relative_to(SOURCES_DIR)
         print(f"  REN  {rel}\n       → {rel_new}")
 
         if not dry_run:
@@ -316,20 +284,28 @@ def run(dry_run: bool, purge: bool):
         save_index(index)
         print(f"\nIndex mis à jour : {len(index)} entrée(s) → {INDEX_FILE}")
 
-    print(f"\n{'Simulation' if dry_run else 'Résultat'} : "
-          f"{renamed} renommé(s), {duped} doublon(s) → _duplicates/, "
-          f"{skipped} déjà préfixés, {errors} erreur(s).")
+    print(
+        f"\n{'Simulation' if dry_run else 'Résultat'} : "
+        f"{renamed} renommé(s), {duped} doublon(s) → _duplicates/, "
+        f"{skipped} déjà préfixés, {errors} erreur(s)."
+    )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Affiche les actions sans les effectuer")
-    parser.add_argument("--purge", action="store_true",
-                        help="Vide sources/_duplicates/ après vérification manuelle")
-    parser.add_argument("--check", action="store_true",
-                        help="Vérifie que chaque .eml est dans le bon dossier provider (lecture seule)")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Affiche les actions sans les effectuer"
+    )
+    parser.add_argument(
+        "--purge", action="store_true", help="Vide sources/_duplicates/ après vérification manuelle"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Vérifie que chaque .eml est dans le bon dossier provider (lecture seule)",
+    )
     args = parser.parse_args()
 
     if args.check:
