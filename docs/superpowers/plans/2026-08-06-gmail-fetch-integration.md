@@ -1664,7 +1664,7 @@ def slugify_subject(subject: str, max_len: int = 40) -> str:
 
 
 def build_filename(gmail_id: str, subject: str) -> str:
-    """gmail_id guarantees uniqueness by construction — no collision
+    """gmail_id guarantees uniqueness by construction: no collision
     detection needed even when two alerts share a near-identical subject."""
     return f"{gmail_id}-{slugify_subject(subject)}.eml"
 
@@ -1859,13 +1859,13 @@ import rename_eml
 
 
 def run_pipeline(dry_run: bool) -> None:
-    print("=== 1/3 — Fetch Gmail ===")
+    print("=== 1/3 - Fetch Gmail ===")
     fetch_gmail.run(dry_run=dry_run)
 
-    print("\n=== 2/3 — Rename & index ===")
+    print("\n=== 2/3 - Rename & index ===")
     rename_eml.run(dry_run=dry_run, purge=False)
 
-    print("\n=== 3/3 — Extract offers ===")
+    print("\n=== 3/3 - Extract offers ===")
     extract_eml.main(dry_run=dry_run)
 
 
