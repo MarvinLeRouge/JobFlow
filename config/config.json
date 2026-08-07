@@ -19,7 +19,7 @@
     "ID", "Traite", "Date_decouverte", "Source", "Titre", "Entreprise",
     "Cle_dedup", "Doublon_ID", "Ville", "Dept", "Type_contrat",
     "Salaire_min", "Salaire_max", "URL", "URL_qualite", "URL_redirect", "Stack",
-    "Raison_exclusion", "Date_candidature", "Notes"
+    "Raison_exclusion", "Date_candidature", "Notes", "Message_ID"
   ],
   "url_qualite_values": ["construite", "email", "vide"],
   "statuts_candidature": [
