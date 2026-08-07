@@ -1,58 +1,133 @@
 # Job Search Tracker
 
-Pipeline Python de traitement des alertes emploi reçues par email.  
-Les offres sont extraites depuis des fichiers `.eml`, dédoublonnées, et exportées en CSV pour import dans Google Sheets.
+Python pipeline for processing job alert emails.
+Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and exported to CSV for import into Google Sheets.
 
 ---
 
-## Fonctionnement général
+## Overview
 
 ```
-sources/<provider>/   ← fichiers .eml classés par plateforme
+fetch_gmail.py        ← Gmail API fetch, OAuth2, routes into sources/<provider>/
         ↓
-  rename_eml.py       ← renommage, dédup par Message-ID, indexation
+sources/<provider>/   ← .eml files per platform
         ↓
-  extract_eml.py      ← extraction des offres → CSV
+  rename_eml.py       ← renaming, Message-ID dedup, ledger indexing
         ↓
-output/import_YYYYMMDD.csv  ← à importer manuellement dans Google Sheets
+  extract_eml.py      ← offer extraction → CSV
+        ↓
+output/import_YYYYMMDD.csv  ← manual import into Google Sheets
+```
+
+`run_pipeline.py` runs all three steps in sequence and is the recommended entry point.
+
+---
+
+## Migration (one-time, after upgrading)
+
+Two one-shot scripts bring an existing installation up to date with the Gmail pipeline. They must be run **in this order**, and both must be run **before** `extract_eml.py` or `run_pipeline.py` is used for real: otherwise `Message_ID` is silently dropped from the exported rows.
+
+**1. Legacy index to ledger** (turns `logs/eml_index.csv` into `logs/email_ledger.json`):
+
+```bash
+python3 migrate_eml_index_to_ledger.py --dry-run   # review the entry count first
+python3 migrate_eml_index_to_ledger.py             # write logs/email_ledger.json
+```
+
+The old `logs/eml_index.csv` is left in place, remove it by hand once the ledger looks right.
+
+**2. Message_ID column** (adds the column to `output/offres.csv` and to `offres_csv_headers` in `config/config.json`):
+
+```bash
+cp output/offres.csv output/offres.csv.bak         # recommended, see the note below
+python3 migrate_offres_add_message_id.py --dry-run # review the row count first
+python3 migrate_offres_add_message_id.py           # write the column
+```
+
+Both files are written to a temp file and moved into place, so an interrupted run cannot truncate them, and `config/config.json` is edited in place rather than reserialized, so its formatting survives. Backing up `output/offres.csv` by hand is still recommended: `output/` is git-ignored, there is no history to fall back on.
+
+Once both migrations have run for real, `extract_eml.py` and `run_pipeline.py` can be used normally. The very first fetch after migration needs an explicit start date, since migrated entries carry no real fetch history:
+
+```bash
+python3 run_pipeline.py --since-days 30
 ```
 
 ---
 
 ## Scripts
 
-### `rename_eml.py`
+### `fetch_gmail.py`
 
-Renomme les fichiers `.eml` au format `yyyymmdd-hhmm-nom.eml`, détecte les doublons par Message-ID, et vérifie que chaque fichier est dans le bon dossier provider.
+Queries the Gmail API for new alert emails, routes them into `sources/<provider>/`, and records each one in `logs/email_ledger.json`.
 
 ```bash
-python3 rename_eml.py              # renommer + dédoublonner
-python3 rename_eml.py --dry-run    # simulation sans modification
-python3 rename_eml.py --check      # vérifier les dossiers sans rien modifier
-python3 rename_eml.py --purge      # vider sources/_duplicates/
+python3 fetch_gmail.py                  # fetch new emails
+python3 fetch_gmail.py --dry-run        # simulation, no download or write
+python3 fetch_gmail.py --since-days 30  # first run only: emails from the last 30 days
 ```
 
-Fichiers écrits : `logs/eml_index.csv`
+`--since-days` is only needed on the very first run, when the ledger has no fetch history yet. Every later run derives its start date automatically from the most recent `fetched_at` in the ledger, with a safety margin so nothing falls through the gap between two runs.
+
+Requires a one-time Gmail OAuth2 setup, see `docs/setup_gmail_auth.md`.
+
+Files written: `.eml` files under `sources/<provider>/`, `logs/email_ledger.json`.
+
+---
+
+### `rename_eml.py`
+
+Renames `.eml` files to the `yyyymmdd-hhmm-name.eml` format, detects duplicates by Message-ID, and checks that each file sits in the right provider folder.
+
+```bash
+python3 rename_eml.py              # rename + dedup
+python3 rename_eml.py --dry-run    # simulation, no changes
+python3 rename_eml.py --check      # check folders only, read-only
+python3 rename_eml.py --purge      # empty sources/_duplicates/
+```
+
+Files written: `logs/email_ledger.json`.
 
 ---
 
 ### `extract_eml.py`
 
-Extrait les offres de tous les `.eml` marqués `PENDING` dans l'index, les dédoublonne, détecte la stack technique et les titres blacklistés, puis écrit deux fichiers CSV.
+Extracts offers from every `.eml` marked `PENDING` in the ledger, deduplicates them, detects the tech stack and blacklisted titles, then writes two CSV files.
 
 ```bash
-python3 extract_eml.py             # extraction complète
-python3 extract_eml.py --dry-run   # simulation sans écriture
-python3 extract_eml.py --with-headers   # forcer l'en-tête dans le CSV d'import
-python3 extract_eml.py --no-headers     # forcer l'absence d'en-tête
+python3 extract_eml.py                # full extraction
+python3 extract_eml.py --dry-run      # simulation, no write
+python3 extract_eml.py --with-headers # force the header row in the import CSV
+python3 extract_eml.py --no-headers   # force no header row
 ```
 
-Fichiers écrits :
-- `output/offres.csv` — archive locale cumulative (référence dédup, **ne pas réimporter dans Sheets**)
-- `output/import_YYYYMMDD.csv` — nouvelles lignes du run uniquement, à importer dans Sheets
-- `logs/eml_index.csv`, `logs/extraction_history.csv`, `logs/YYYYMMDD-HHMM_extraction.log`
+Files written:
+- `output/offres.csv` - cumulative local archive (dedup reference, **do not reimport into Sheets**)
+- `output/import_YYYYMMDD.csv` - new rows from this run only, to import into Sheets
+- `logs/email_ledger.json`, `logs/extraction_history.csv`, `logs/YYYYMMDD-HHMM_extraction.log`
 
-Providers supportés : France Travail, Indeed (alertes + match direct), LinkedIn, Meteojob, Jobijoba, Talent.com.
+Supported providers: France Travail, Indeed (alerts + direct match), LinkedIn, Meteojob, Jobijoba, Talent.com.
+
+---
+
+### `run_pipeline.py`
+
+Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` in sequence.
+
+```bash
+python3 run_pipeline.py                  # full pipeline
+python3 run_pipeline.py --dry-run        # simulate all three steps
+python3 run_pipeline.py --since-days 30  # first run after migration
+```
+
+`--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run after the [migration](#migration-one-time-after-upgrading), because migrated ledger entries do not count as fetch history: without it, the run stops on "impossible de déterminer un point de départ".
+
+Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure.
+
+---
+
+## Gmail OAuth2 setup
+
+`fetch_gmail.py` needs a Google Cloud project with the Gmail API enabled and a one-time OAuth2 authorization (`credentials.json` and `token.json`, both git-ignored). See `docs/setup_gmail_auth.md` for the full walkthrough, including the "Access blocked" testing-mode pitfall and how to verify a silent token refresh.
 
 ---
 
@@ -60,63 +135,109 @@ Providers supportés : France Travail, Indeed (alertes + match direct), LinkedIn
 
 ### `config/config.json`
 
-| Clé | Rôle |
+| Key | Role |
 |-----|------|
-| `offres_csv_headers` | ordre des colonnes CSV |
-| `stack_keywords` | mots-clés de détection de stack technique |
-| `ville_dept` | correspondance ville → numéro de département |
-| `blacklist_titres` | titres à marquer automatiquement (ex : "nounou", "garde d'enfant") |
+| `offres_csv_headers` | order of CSV columns |
+| `stack_keywords` | keywords used to detect the tech stack |
+| `ville_dept` | city → département number mapping |
+| `blacklist_titres` | titles to auto-flag (e.g. "nounou", "garde d'enfant") |
 
 ### `config/scraping_patterns.json`
 
-Patterns d'extraction par provider : domaine expéditeur, dossier source, expressions régulières.
+Extraction patterns per provider: sender domain, source folder, regular expressions.
 
 ---
 
-## Déduplication
+## The ledger (`logs/email_ledger.json`)
 
-La clé de dédup (`Cle_dedup`) est construite à partir de :
-- l'entreprise normalisée (minuscules, sans accents ni tirets)
-- la ville normalisée
-- un slug du titre (sans mots vides ni mentions H/F, tronqué à 25 caractères)
+Shared tracking file used by `fetch_gmail.py`, `rename_eml.py` and `extract_eml.py`, replacing the older `logs/eml_index.csv`. It is a single JSON object keyed by Message-ID, one entry per email:
 
-Format : `entreprise|ville|titreslugtronque`
+```json
+{
+  "<msg-1@example.com>": {
+    "gmail_id": "18f2a9c7b3e4d501",
+    "fichier": "indeed/20260806-1032-foo.eml",
+    "date_email": "2026-08-06T10:32:00+0200",
+    "fetched_at": "2026-08-06T10:35:12Z",
+    "indexed_at": "2026-08-06T10:35:12Z",
+    "statut_extraction": "PENDING"
+  }
+}
+```
 
-Si une offre avec la même clé existe déjà dans `offres.csv`, la colonne `Doublon_ID` est renseignée avec l'ID de la première occurrence.
-
----
-
-## Blacklist de titres
-
-Les termes définis dans `blacklist_titres` (config.json) sont recherchés dans le titre à chaque extraction, sans sensibilité à la casse ni aux accents.
-
-Si un titre correspond :
-- `Raison_exclusion` : `Blacklisté: <terme>`
-- `Notes` : `⛔ Blacklisté: <terme>`
-
-La ligne est conservée dans le CSV et importée normalement dans Sheets.
-
----
-
-## Google Sheets — import et mise en forme
-
-**Import :** Données → Importer → Ajouter à la fin de la feuille, en sélectionnant `output/import_YYYYMMDD.csv`.
-
-**Mise en forme conditionnelle** (à configurer une fois, plage `A2:U`) :
-
-| Priorité | Couleur | Formule | Signification |
-|----------|---------|---------|---------------|
-| 1 (haute) | 🟡 Jaune | `=$H2<>""` | Doublon |
-| 2 | 🔴 Rouge | `=ISNUMBER(SEARCH("Blacklist";$T2))` | Blacklisté |
-
-> Colonnes de référence (après suppression de `Statut`) : A=ID, B=Traite, C=Date_decouverte, D=Source, E=Titre, F=Entreprise, G=Cle_dedup, H=Doublon_ID, I=Ville, J=Dept, K=Type_contrat, L=Salaire_min, M=Salaire_max, N=URL, O=URL_qualite, P=URL_redirect, Q=Stack, R=Raison_exclusion, S=Date_candidature, T=Notes
+- `gmail_id`: the Gmail API message ID. `"before_gmail_api"` for entries migrated from the legacy `eml_index.csv`, `"manual"` for files indexed by `rename_eml.py` that were never fetched through the API (dropped into `sources/` by hand).
+- `fichier`: file path relative to `sources/`.
+- `date_email`: the email's `Date` header, parsed to an ISO 8601 timestamp with offset.
+- `fetched_at`: UTC timestamp of the `fetch_gmail.py` download. For entries migrated from the legacy `eml_index.csv`, it is set to the same value as `indexed_at` (the old `Date_indexation` column), not left empty.
+- `indexed_at`: UTC timestamp of the last `rename_eml.py` pass over this file.
+- `statut_extraction`: `PENDING`, `OK`, `PARTIEL`, `ERREUR` or `IGNORE`, set by `extract_eml.py` once it has processed the file.
 
 ---
 
-## Ajouter un provider
+## Deduplication
 
-1. Créer `sources/<provider>/`
-2. Ajouter une entrée dans `config/scraping_patterns.json`
-3. Implémenter `extract_<provider>(html, msg, patterns)` dans `extract_eml.py`
-4. L'ajouter dans la table `EXTRACTORS`
-5. Tester : `python3 extract_eml.py --dry-run`
+The dedup key (`Cle_dedup`) is built from:
+- the normalized company name (lowercase, no accents or hyphens)
+- the normalized city
+- a slug of the title (no stop words or H/F mentions, truncated to 25 characters)
+
+Format: `entreprise|ville|titreslugtronque`
+
+If an offer with the same key already exists in `offres.csv`, the `Doublon_ID` column is filled with the ID of the first occurrence.
+
+---
+
+## Title blacklist
+
+Terms defined in `blacklist_titres` (config.json) are searched for in the title on every extraction, case- and accent-insensitive.
+
+When a title matches:
+- `Raison_exclusion`: `Blacklisté: <term>`
+- `Notes`: `⛔ Blacklisté: <term>`
+
+The row is kept in the CSV and imported normally into Sheets.
+
+---
+
+## Google Sheets - import and formatting
+
+**Import:** Data → Import → Append to current sheet, selecting `output/import_YYYYMMDD.csv`.
+
+**Conditional formatting** (set up once, range `A2:U`):
+
+| Priority | Color | Formula | Meaning |
+|----------|-------|---------|---------|
+| 1 (high) | Yellow | `=$H2<>""` | Duplicate |
+| 2 | Red | `=ISNUMBER(SEARCH("Blacklist";$T2))` | Blacklisted |
+
+> Reference columns: A=ID, B=Traite, C=Date_decouverte, D=Source, E=Titre, F=Entreprise, G=Cle_dedup, H=Doublon_ID, I=Ville, J=Dept, K=Type_contrat, L=Salaire_min, M=Salaire_max, N=URL, O=URL_qualite, P=URL_redirect, Q=Stack, R=Raison_exclusion, S=Date_candidature, T=Notes, U=Message_ID
+>
+> Columns A through T are unchanged from before this pipeline's Gmail integration. `Message_ID` was appended as the last column (U) rather than inserted, so the conditional formatting formulas above (and any other formula referencing a lettered column) keep working without adjustment.
+
+---
+
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+ruff check .
+ruff format --check .
+pre-commit install   # once, to enable the git hook
+```
+
+---
+
+## Adding a provider
+
+1. Create `sources/<provider>/`
+2. Add an entry in `config/scraping_patterns.json`
+3. Implement `extract_<provider>(html, msg, patterns)` in `extract_eml.py`
+4. Add it to the `EXTRACTORS` table
+5. Test: `python3 extract_eml.py --dry-run`
+
+---
+
+## Roadmap
+
+**Automating the Sheets import** was considered and deliberately deferred: writing offers directly via the Google Sheets API instead of the manual CSV import would require a new `spreadsheets` OAuth scope, handling partial writes to a live shared document, and would remove the visual-review safety net the manual import currently provides before offers land in the master tracking sheet. It stays out of scope for now, to revisit only once confidence in unattended extraction quality has been established over time - a separate project, not a pending task on this one.

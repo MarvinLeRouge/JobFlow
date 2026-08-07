@@ -941,11 +941,13 @@ git commit -m "feat: switch rename_eml.py to the unified email ledger"
 
 Same ledger swap as Task 7, plus the new `Message_ID` field on every output row (available now that Task 6 added the column). The extraction logic itself (all `extract_*` functions, dedup, blacklist, stack detection) is untouched.
 
+This task also removes `extract_eml.py`'s own local `sender_domain(msg)` function (a duplicate, message-object-taking variant of the same regex now shared via `providers.sender_domain(from_header: str)` from Task 2) in favor of the shared one — decided during pre-flight review to avoid a DRY finding surfacing mid-loop.
+
 **Files:**
 - Modify: `extract_eml.py`
 
 **Interfaces:**
-- Consumes: `ledger.load_ledger`, `ledger.save_ledger` (Task 4).
+- Consumes: `ledger.load_ledger`, `ledger.save_ledger` (Task 4), `providers.sender_domain` (Task 2).
 
 - [ ] **Step 1: Update module-level constants and imports**
 
@@ -965,13 +967,30 @@ Add near the top imports:
 
 ```python
 from ledger import load_ledger, save_ledger
+from providers import sender_domain
 ```
 
-- [ ] **Step 2: Remove `load_eml_index()` and `save_eml_index()`**
+- [ ] **Step 2: Remove the local `sender_domain(msg)` function and update its call site**
+
+Delete the local `sender_domain(msg)` function (the one taking an `email.message.Message` and reading its `From` header — now superseded by the imported `providers.sender_domain(from_header: str)`).
+
+In `main()`, change:
+
+```python
+        domain = sender_domain(msg)
+```
+
+to:
+
+```python
+        domain = sender_domain(msg.get("From", ""))
+```
+
+- [ ] **Step 3: Remove `load_eml_index()` and `save_eml_index()`**
 
 Delete the `# ── Gestion index EML` section (both functions) — replaced by direct `load_ledger`/`save_ledger` calls in `main()`.
 
-- [ ] **Step 3: Replace `main()`**
+- [ ] **Step 4: Replace `main()`**
 
 ```python
 def main(dry_run: bool, force_headers: bool | None = None):
@@ -1212,12 +1231,12 @@ def main(dry_run: bool, force_headers: bool | None = None):
         append_history(run_dt, stats)
 ```
 
-- [ ] **Step 4: Verify against real project data**
+- [ ] **Step 5: Verify against real project data**
 
 Run: `python3 extract_eml.py --dry-run`
 Expected: completes without error. Since Task 5's migration preserved every `Statut_extraction` value, only genuinely `PENDING` emails are processed — same count as before this change.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add extract_eml.py
@@ -1645,7 +1664,7 @@ def slugify_subject(subject: str, max_len: int = 40) -> str:
 
 
 def build_filename(gmail_id: str, subject: str) -> str:
-    """gmail_id guarantees uniqueness by construction — no collision
+    """gmail_id guarantees uniqueness by construction: no collision
     detection needed even when two alerts share a near-identical subject."""
     return f"{gmail_id}-{slugify_subject(subject)}.eml"
 
@@ -1840,13 +1859,13 @@ import rename_eml
 
 
 def run_pipeline(dry_run: bool) -> None:
-    print("=== 1/3 — Fetch Gmail ===")
+    print("=== 1/3 - Fetch Gmail ===")
     fetch_gmail.run(dry_run=dry_run)
 
-    print("\n=== 2/3 — Rename & index ===")
+    print("\n=== 2/3 - Rename & index ===")
     rename_eml.run(dry_run=dry_run, purge=False)
 
-    print("\n=== 3/3 — Extract offers ===")
+    print("\n=== 3/3 - Extract offers ===")
     extract_eml.main(dry_run=dry_run)
 
 
