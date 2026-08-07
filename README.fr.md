@@ -23,6 +23,37 @@ output/import_YYYYMMDD.csv  ← à importer manuellement dans Google Sheets
 
 ---
 
+## Migration (une seule fois, après mise à jour)
+
+Deux scripts one-shot mettent une installation existante à niveau pour le pipeline Gmail. Ils doivent être lancés **dans cet ordre**, et tous les deux **avant** toute utilisation réelle de `extract_eml.py` ou `run_pipeline.py` : sinon `Message_ID` est silencieusement perdu dans les lignes exportées.
+
+**1. Ancien index vers ledger** (transforme `logs/eml_index.csv` en `logs/email_ledger.json`) :
+
+```bash
+python3 migrate_eml_index_to_ledger.py --dry-run   # vérifier d'abord le nombre d'entrées
+python3 migrate_eml_index_to_ledger.py             # écrire logs/email_ledger.json
+```
+
+L'ancien `logs/eml_index.csv` n'est pas supprimé, à retirer à la main une fois le ledger vérifié.
+
+**2. Colonne Message_ID** (ajoute la colonne à `output/offres.csv` et à `offres_csv_headers` dans `config/config.json`) :
+
+```bash
+cp output/offres.csv output/offres.csv.bak         # recommandé, voir la note ci-dessous
+python3 migrate_offres_add_message_id.py --dry-run # vérifier d'abord le nombre de lignes
+python3 migrate_offres_add_message_id.py           # écrire la colonne
+```
+
+Les deux fichiers sont écrits dans un fichier temporaire puis déplacés en place : un run interrompu ne peut pas les tronquer, et `config/config.json` est modifié sur place plutôt que resérialisé, sa mise en forme est donc préservée. Sauvegarder `output/offres.csv` à la main reste recommandé : `output/` est exclu du dépôt, il n'y a aucun historique de secours.
+
+Une fois les deux migrations réellement passées, `extract_eml.py` et `run_pipeline.py` s'utilisent normalement. Le tout premier fetch après migration a besoin d'une date de départ explicite, car les entrées migrées ne comptent pas comme un historique de fetch :
+
+```bash
+python3 run_pipeline.py --since-days 30
+```
+
+---
+
 ## Scripts
 
 ### `fetch_gmail.py`
@@ -83,9 +114,12 @@ Providers supportés : France Travail, Indeed (alertes + match direct), LinkedIn
 Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml`.
 
 ```bash
-python3 run_pipeline.py            # pipeline complet
-python3 run_pipeline.py --dry-run  # simuler les trois étapes
+python3 run_pipeline.py                  # pipeline complet
+python3 run_pipeline.py --dry-run        # simuler les trois étapes
+python3 run_pipeline.py --since-days 30  # premier run après migration
 ```
+
+`--since-days` est transmis à `fetch_gmail.py`. Il est nécessaire pour le tout premier run après la [migration](#migration-une-seule-fois-après-mise-à-jour), car les entrées de ledger migrées ne comptent pas comme historique de fetch : sans lui, le run s'arrête sur "impossible de déterminer un point de départ".
 
 Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par une étape précédente.
 

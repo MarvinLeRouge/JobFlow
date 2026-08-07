@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from ledger import load_ledger, save_ledger
 
 
@@ -27,6 +29,27 @@ def test_save_ledger_creates_parent_directory(tmp_path):
     path = tmp_path / "nested" / "logs" / "email_ledger.json"
     save_ledger(path, {})
     assert path.exists()
+
+
+def test_save_ledger_leaves_no_temp_file_behind(tmp_path):
+    path = tmp_path / "email_ledger.json"
+    save_ledger(path, {"<msg-1>": {"gmail_id": "abc123"}})
+    assert [p.name for p in tmp_path.iterdir()] == ["email_ledger.json"]
+
+
+def test_save_ledger_keeps_previous_file_on_write_failure(tmp_path, monkeypatch):
+    path = tmp_path / "email_ledger.json"
+    save_ledger(path, {"<msg-1>": {"gmail_id": "abc123"}})
+    original = path.read_text(encoding="utf-8")
+
+    class Unserializable:
+        pass
+
+    with pytest.raises(TypeError):
+        save_ledger(path, {"<msg-2>": Unserializable()})
+
+    assert path.read_text(encoding="utf-8") == original
+    assert [p.name for p in tmp_path.iterdir()] == ["email_ledger.json"]
 
 
 def test_save_ledger_writes_valid_json(tmp_path):

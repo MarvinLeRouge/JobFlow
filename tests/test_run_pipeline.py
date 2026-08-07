@@ -6,7 +6,9 @@ import run_pipeline
 def test_run_pipeline_calls_steps_in_order(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        run_pipeline.fetch_gmail, "run", lambda dry_run: calls.append(("fetch", dry_run))
+        run_pipeline.fetch_gmail,
+        "run",
+        lambda dry_run, since_days: calls.append(("fetch", dry_run)),
     )
     monkeypatch.setattr(
         run_pipeline.rename_eml,
@@ -22,8 +24,38 @@ def test_run_pipeline_calls_steps_in_order(monkeypatch):
     assert calls == [("fetch", True), ("rename", True, False), ("extract", True)]
 
 
+def test_run_pipeline_passes_since_days_to_fetch(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        run_pipeline.fetch_gmail,
+        "run",
+        lambda dry_run, since_days: calls.append(("fetch", dry_run, since_days)),
+    )
+    monkeypatch.setattr(run_pipeline.rename_eml, "run", lambda dry_run, purge: None)
+    monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
+
+    run_pipeline.run_pipeline(dry_run=True, since_days=30)
+
+    assert calls == [("fetch", True, 30)]
+
+
+def test_run_pipeline_defaults_since_days_to_none(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        run_pipeline.fetch_gmail,
+        "run",
+        lambda dry_run, since_days: calls.append(since_days),
+    )
+    monkeypatch.setattr(run_pipeline.rename_eml, "run", lambda dry_run, purge: None)
+    monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
+
+    run_pipeline.run_pipeline(dry_run=True)
+
+    assert calls == [None]
+
+
 def test_run_pipeline_stops_on_fetch_failure(monkeypatch):
-    def failing_fetch(dry_run):
+    def failing_fetch(dry_run, since_days):
         raise RuntimeError("network error")
 
     calls = []
