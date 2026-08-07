@@ -134,7 +134,7 @@ Shared tracking file used by `fetch_gmail.py`, `rename_eml.py` and `extract_eml.
 - `gmail_id`: the Gmail API message ID. `"before_gmail_api"` for entries migrated from the legacy `eml_index.csv`, `"manual"` for files indexed by `rename_eml.py` that were never fetched through the API (dropped into `sources/` by hand).
 - `fichier`: file path relative to `sources/`.
 - `date_email`: the email's `Date` header, parsed to an ISO 8601 timestamp with offset.
-- `fetched_at`: UTC timestamp of the `fetch_gmail.py` download, empty for pre-migration entries.
+- `fetched_at`: UTC timestamp of the `fetch_gmail.py` download. For entries migrated from the legacy `eml_index.csv`, it is set to the same value as `indexed_at` (the old `Date_indexation` column), not left empty.
 - `indexed_at`: UTC timestamp of the last `rename_eml.py` pass over this file.
 - `statut_extraction`: `PENDING`, `OK`, `PARTIEL`, `ERREUR` or `IGNORE`, set by `extract_eml.py` once it has processed the file.
 
