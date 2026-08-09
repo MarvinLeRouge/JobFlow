@@ -249,6 +249,59 @@ def rows_needing_r_dropdown(rows: list[dict], start_row: int) -> list[tuple[int,
     return ranges
 
 
+def rows_needing_r_clear(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
+    """Contiguous 1-indexed row ranges among the new rows whose
+    Raison_exclusion is non-empty - these need column R's data validation
+    explicitly cleared. Newly appended rows can inherit stale dropdown
+    validation from the row above them regardless of what gets explicitly
+    copied afterward - confirmed live: a row deliberately excluded from
+    rows_needing_r_dropdown's copy still showed the inherited validation
+    until cleared."""
+    ranges = []
+    range_start = None
+    for i, row in enumerate(rows):
+        row_number = start_row + i
+        if row.get("Raison_exclusion", ""):
+            if range_start is None:
+                range_start = row_number
+        else:
+            if range_start is not None:
+                ranges.append((range_start, row_number - 1))
+                range_start = None
+    if range_start is not None:
+        ranges.append((range_start, start_row + len(rows) - 1))
+    return ranges
+
+
+def clear_data_validation(
+    service,
+    spreadsheet_id: str,
+    sheet_id: int,
+    column_index: int,
+    start_row: int,
+    end_row: int,
+) -> None:
+    """Explicitly remove any data validation from a column range (1-indexed
+    rows, inclusive), via a setDataValidation request with no rule - Sheets
+    interprets the absence of a rule as 'clear validation for this range'."""
+    body = {
+        "requests": [
+            {
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": start_row - 1,
+                        "endRowIndex": end_row,
+                        "startColumnIndex": column_index,
+                        "endColumnIndex": column_index + 1,
+                    },
+                }
+            }
+        ]
+    }
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+
 def write_new_rows(
     service,
     spreadsheet_id: str,
@@ -350,6 +403,15 @@ def run(dry_run: bool, today: str | None = None) -> None:
                 sheet_id,
                 reference_sheet_id,
                 reference_row_r,
+                raison_col_index,
+                r_start,
+                r_end,
+            )
+        for r_start, r_end in rows_needing_r_clear(new_rows, start_row):
+            clear_data_validation(
+                service,
+                spreadsheet_id,
+                sheet_id,
                 raison_col_index,
                 r_start,
                 r_end,
