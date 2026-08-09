@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml.
+"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml -> sheets_sync.
 
 Usage:
     python3 run_pipeline.py [--dry-run] [--since-days N]
@@ -17,17 +17,23 @@ import argparse
 import extract_eml
 import fetch_gmail
 import rename_eml
+import sheets_sync
 
 
 def run_pipeline(dry_run: bool, since_days: int | None = None) -> None:
-    print("=== 1/3 - Fetch Gmail ===")
+    sheets_sync.check_error_gate()
+
+    print("=== 1/4 - Fetch Gmail ===")
     fetch_gmail.run(dry_run=dry_run, since_days=since_days)
 
-    print("\n=== 2/3 - Rename & index ===")
+    print("\n=== 2/4 - Rename & index ===")
     rename_eml.run(dry_run=dry_run, purge=False)
 
-    print("\n=== 3/3 - Extract offers ===")
+    print("\n=== 3/4 - Extract offers ===")
     extract_eml.main(dry_run=dry_run)
+
+    print("\n=== 4/4 - Sync to Google Sheets ===")
+    sheets_sync.run(dry_run=dry_run)
 
 
 if __name__ == "__main__":

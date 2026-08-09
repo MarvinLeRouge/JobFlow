@@ -1,7 +1,7 @@
 # Job Search Tracker
 
 Python pipeline for processing job alert emails.
-Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and exported to CSV for import into Google Sheets.
+Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and synced into Google Sheets.
 
 ---
 
@@ -16,10 +16,14 @@ sources/<provider>/   ← .eml files per platform
         ↓
   extract_eml.py      ← offer extraction → CSV
         ↓
-output/import_YYYYMMDD.csv  ← manual import into Google Sheets
+output/import_YYYYMMDD.csv  ← new offers from this run, still produced
+        ↓
+  sheets_sync.py      ← appends new rows to the Sheet, reproduces formatting
+        ↓
+  Google Sheet         ← master tracking sheet
 ```
 
-`run_pipeline.py` runs all three steps in sequence and is the recommended entry point.
+`run_pipeline.py` runs all four steps in sequence and is the recommended entry point.
 
 ---
 
@@ -51,6 +55,8 @@ Once both migrations have run for real, `extract_eml.py` and `run_pipeline.py` c
 ```bash
 python3 run_pipeline.py --since-days 30
 ```
+
+**Sheets sync target:** `sheets_sync.py` itself needs no data migration, but `config/config.json`'s `sheets_sync.spreadsheet_id` currently points at a duplicated **test** sheet, not the real production tracking sheet. Switching it to the real spreadsheet's ID is a required manual step before relying on `sheets_sync.py` or `run_pipeline.py` for actual use.
 
 ---
 
@@ -109,25 +115,61 @@ Supported providers: France Travail, Indeed (alerts + direct match), LinkedIn, M
 
 ---
 
+### `sheets_sync.py`
+
+Syncs new offers from the latest `output/import_YYYYMMDD.csv` into the real Google Sheet: compares the sheet's own highest offer ID (column A) against the CSV to find only the rows it doesn't already have, appends them, reproduces column B's (`Traite`) formula/dropdown and column R's (`Raison_exclusion`) dropdown on those rows by copying formatting from the dedicated "Références" tab, and extends the sheet's row-level conditional formatting rules (duplicate/blacklist/alternance highlighting, "En cours" status in column A) to cover the newly appended rows.
+
+```bash
+python3 sheets_sync.py             # sync new rows to the Sheet
+python3 sheets_sync.py --dry-run   # simulation, no write, just reports what would sync
+python3 sheets_sync.py --ack-error # acknowledge and clear a blocked error state
+```
+
+It only looks at **today's** `output/import_YYYYMMDD.csv`. If `extract_eml.py` hasn't produced one today, it prints a message and exits without error.
+
+**Error gate:** on any failure, the error message and timestamp are recorded to `logs/sheets_sync_error.json`. Every later run of `sheets_sync.py` or `run_pipeline.py` then stops immediately with that message until it is acknowledged with `python3 sheets_sync.py --ack-error`. `fetch_gmail.py`, `rename_eml.py` and `extract_eml.py` are unaffected by the gate and remain usable individually.
+
+Files written: nothing durable locally besides `logs/sheets_sync_error.json` on failure; the sheet itself is the only lasting output.
+
+---
+
 ### `run_pipeline.py`
 
-Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` in sequence.
+Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` in sequence.
 
 ```bash
 python3 run_pipeline.py                  # full pipeline
-python3 run_pipeline.py --dry-run        # simulate all three steps
+python3 run_pipeline.py --dry-run        # simulate all four steps
 python3 run_pipeline.py --since-days 30  # first run after migration
 ```
 
 `--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run after the [migration](#migration-one-time-after-upgrading), because migrated ledger entries do not count as fetch history: without it, the run stops on "impossible de déterminer un point de départ".
 
-Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure.
+Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure. It also stops before step 1 if `sheets_sync.py` has an unacknowledged error left over from a previous run (see the error gate above).
+
+---
+
+### `inspect_sheet_formatting.py`
+
+One-off diagnostic tool built during `sheets_sync.py`'s feasibility spike, not part of the regular pipeline. Prints a sheet's cell formulas, data validation rules, and conditional formatting, read directly via the Sheets API, to inspect exactly what needs to be replicated.
+
+```bash
+python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
+```
+
+Run only against a duplicated **test** sheet, never production. Files written: none, prints to stdout.
 
 ---
 
 ## Gmail OAuth2 setup
 
 `fetch_gmail.py` needs a Google Cloud project with the Gmail API enabled and a one-time OAuth2 authorization (`credentials.json` and `token.json`, both git-ignored). See `docs/setup_gmail_auth.md` for the full walkthrough, including the "Access blocked" testing-mode pitfall and how to verify a silent token refresh.
+
+---
+
+## Google Sheets OAuth2 setup
+
+`sheets_sync.py` needs its own OAuth2 token, `token_sheets.json` (git-ignored), authorized with the `spreadsheets` scope. It reuses the same OAuth client as Gmail (`credentials.json`) but keeps a separate token file since the scopes differ. The first real run opens a browser for a one-time consent screen; after that, `auth.get_credentials()` refreshes the token silently, the same way it already does for Gmail.
 
 ---
 
@@ -141,6 +183,25 @@ Fail-fast: the pipeline stops at the first step that raises, so a later step nev
 | `stack_keywords` | keywords used to detect the tech stack |
 | `ville_dept` | city → département number mapping |
 | `blacklist_titres` | titles to auto-flag (e.g. "nounou", "garde d'enfant") |
+| `sheets_sync` | Google Sheets sync target and reference-cell coordinates, see below |
+
+#### `sheets_sync`
+
+| Key | Role |
+|-----|------|
+| `spreadsheet_id` | ID of the target Google Sheet (from its URL) |
+| `sheet_name` | tab name holding the offers (e.g. `Offres`) |
+| `reference_sheet_name` | tab holding the reference cells `sheets_sync.py` copies formatting from (e.g. `Références`) |
+| `reference_row_b` | row number in the reference tab holding column B's (`Traite`) formula/dropdown to copy |
+| `reference_row_r` | row number in the reference tab holding column R's (`Raison_exclusion`) dropdown to copy |
+
+> The current `spreadsheet_id` points at a duplicated **test** sheet, not the production tracking sheet - see [Migration](#migration-one-time-after-upgrading) above before using `sheets_sync.py` for real.
+
+#### Important: the Références tab is a live dependency
+
+The `reference_sheet_name` tab is not a one-time setup aid: `sheets_sync.py` reads `reference_row_b` and `reference_row_r` on **every sync run**, not just once, and copies their formatting onto each newly-appended row. This is because dropdown/validation colors turned out not to be readable via the Sheets API at all, so live copy-paste from these two reference cells is the only way to reproduce them.
+
+Nothing enforces this tab's structure. Reordering rows in it (e.g. inserting a row above row 2), or clearing/changing the formatting or dropdown validation on the reference cells themselves, makes every future sync silently copy wrong or missing formatting onto new rows - with no error and no error-gate trip. The error gate only catches the tab being renamed or deleted outright, not its internal rows changing.
 
 ### `config/scraping_patterns.json`
 
@@ -201,9 +262,9 @@ The row is kept in the CSV and imported normally into Sheets.
 
 ## Google Sheets - import and formatting
 
-**Import:** Data → Import → Append to current sheet, selecting `output/import_YYYYMMDD.csv`.
+**Import:** now automated by `sheets_sync.py` (see above). Manual import (Data → Import → Append to current sheet, selecting `output/import_YYYYMMDD.csv`) is no longer the normal path, but still works as a fallback if `sheets_sync.py` is blocked or unavailable.
 
-**Conditional formatting** (set up once, range `A2:U`):
+**Conditional formatting** (set up once on the sheet, range `A2:U`):
 
 | Priority | Color | Formula | Meaning |
 |----------|-------|---------|---------|
@@ -213,6 +274,8 @@ The row is kept in the CSV and imported normally into Sheets.
 > Reference columns: A=ID, B=Traite, C=Date_decouverte, D=Source, E=Titre, F=Entreprise, G=Cle_dedup, H=Doublon_ID, I=Ville, J=Dept, K=Type_contrat, L=Salaire_min, M=Salaire_max, N=URL, O=URL_qualite, P=URL_redirect, Q=Stack, R=Raison_exclusion, S=Date_candidature, T=Notes, U=Message_ID
 >
 > Columns A through T are unchanged from before this pipeline's Gmail integration. `Message_ID` was appended as the last column (U) rather than inserted, so the conditional formatting formulas above (and any other formula referencing a lettered column) keep working without adjustment.
+>
+> The sheet also carries two further row-level rules not detailed here (alternance/stage highlighting and the "En cours" status highlight, the latter scoped to column A only). `sheets_sync.py` extends all four rules' row ranges automatically when it appends new rows, whichever column scope each one already has.
 
 ---
 
@@ -240,4 +303,4 @@ pre-commit install   # once, to enable the git hook
 
 ## Roadmap
 
-**Automating the Sheets import** was considered and deliberately deferred: writing offers directly via the Google Sheets API instead of the manual CSV import would require a new `spreadsheets` OAuth scope, handling partial writes to a live shared document, and would remove the visual-review safety net the manual import currently provides before offers land in the master tracking sheet. It stays out of scope for now, to revisit only once confidence in unattended extraction quality has been established over time - a separate project, not a pending task on this one.
+**Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
