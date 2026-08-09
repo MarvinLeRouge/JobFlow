@@ -1,17 +1,25 @@
 import csv
-from unittest.mock import MagicMock
+import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sheets_sync import (
     check_error_gate,
     clear_error_state,
+    copy_reference_formatting,
+    get_last_data_row,
+    get_sheet_id,
+    latest_import_csv,
     offer_id_number,
     read_error_state,
     read_import_rows,
     read_last_synced_id,
+    row_values,
     rows_to_sync,
+    run,
     write_error_state,
+    write_new_rows,
 )
 
 
@@ -117,3 +125,287 @@ def test_check_error_gate_passes_silently_when_no_error(tmp_path, monkeypatch):
     monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
 
     check_error_gate()  # must not raise
+
+
+def test_row_values_orders_by_headers_and_injects_traite_formula():
+    row = {"ID": "E000001", "Titre": "Dev", "Traite": "FALSE", "Raison_exclusion": ""}
+    headers = ["ID", "Titre", "Traite", "Raison_exclusion"]
+
+    result = row_values(row, headers, row_number=100)
+
+    assert result == ["E000001", "Dev", '=R100<>""', ""]
+
+
+def test_row_values_defaults_missing_fields_to_empty_string():
+    row = {"ID": "E000001", "Traite": "FALSE"}
+    headers = ["ID", "Traite", "Message_ID"]
+
+    result = row_values(row, headers, row_number=50)
+
+    assert result == ["E000001", '=R50<>""', ""]
+
+
+def test_row_values_preserves_raison_exclusion_value():
+    row = {"ID": "E000002", "Traite": "FALSE", "Raison_exclusion": "Blacklisté: nounou"}
+    headers = ["ID", "Traite", "Raison_exclusion"]
+
+    result = row_values(row, headers, row_number=200)
+
+    assert result == ["E000002", '=R200<>""', "Blacklisté: nounou"]
+
+
+def test_get_sheet_id_finds_matching_title():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Offres"}},
+            {"properties": {"sheetId": 558063207, "title": "Références"}},
+        ]
+    }
+
+    assert get_sheet_id(service, "sheet-id", "Références") == 558063207
+
+
+def test_get_sheet_id_raises_when_not_found():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0, "title": "Offres"}}]
+    }
+
+    with pytest.raises(ValueError):
+        get_sheet_id(service, "sheet-id", "Nonexistent")
+
+
+def test_get_last_data_row_counts_column_a_values():
+    service = MagicMock()
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.get.return_value.execute.return_value = {
+        "values": [["ID"], ["E000001"], ["E000002"]]
+    }
+
+    assert get_last_data_row(service, "sheet-id", "Offres") == 3
+
+
+def test_get_last_data_row_returns_one_for_header_only_sheet():
+    service = MagicMock()
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.get.return_value.execute.return_value = {"values": [["ID"]]}
+
+    assert get_last_data_row(service, "sheet-id", "Offres") == 1
+
+
+def test_copy_reference_formatting_builds_correct_copypaste_request():
+    service = MagicMock()
+
+    copy_reference_formatting(
+        service,
+        "sheet-id",
+        sheet_id=0,
+        reference_sheet_id=558063207,
+        reference_row=2,
+        column_index=1,
+        start_row=5277,
+        end_row=5279,
+    )
+
+    service.spreadsheets.return_value.batchUpdate.assert_called_once_with(
+        spreadsheetId="sheet-id",
+        body={
+            "requests": [
+                {
+                    "copyPaste": {
+                        "source": {
+                            "sheetId": 558063207,
+                            "startRowIndex": 1,
+                            "endRowIndex": 2,
+                            "startColumnIndex": 1,
+                            "endColumnIndex": 2,
+                        },
+                        "destination": {
+                            "sheetId": 0,
+                            "startRowIndex": 5276,
+                            "endRowIndex": 5279,
+                            "startColumnIndex": 1,
+                            "endColumnIndex": 2,
+                        },
+                        "pasteType": "PASTE_NORMAL",
+                    }
+                }
+            ]
+        },
+    )
+
+
+def test_copy_reference_formatting_targets_the_given_column():
+    service = MagicMock()
+
+    copy_reference_formatting(
+        service,
+        "sheet-id",
+        sheet_id=0,
+        reference_sheet_id=558063207,
+        reference_row=3,
+        column_index=17,
+        start_row=5277,
+        end_row=5279,
+    )
+
+    body = service.spreadsheets.return_value.batchUpdate.call_args.kwargs["body"]
+    request = body["requests"][0]["copyPaste"]
+    assert request["destination"]["startColumnIndex"] == 17
+    assert request["destination"]["endColumnIndex"] == 18
+
+
+def test_write_new_rows_calls_values_update_with_correct_range_and_formula():
+    service = MagicMock()
+    headers = ["ID", "Traite"]
+    rows = [
+        {"ID": "E000010", "Traite": "FALSE"},
+        {"ID": "E000011", "Traite": "FALSE"},
+    ]
+
+    write_new_rows(service, "sheet-id", "Offres", rows, headers, start_row=100)
+
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.update.assert_called_once_with(
+        spreadsheetId="sheet-id",
+        range="Offres!A100:B101",
+        valueInputOption="USER_ENTERED",
+        body={
+            "values": [
+                ["E000010", '=R100<>""'],
+                ["E000011", '=R101<>""'],
+            ]
+        },
+    )
+
+
+def test_write_new_rows_does_nothing_for_empty_list():
+    service = MagicMock()
+
+    write_new_rows(service, "sheet-id", "Offres", [], ["ID"], start_row=100)
+
+    service.spreadsheets.return_value.values.return_value.update.assert_not_called()
+
+
+def test_latest_import_csv_returns_path_when_file_exists(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    (tmp_path / "import_20260101.csv").write_text("", encoding="utf-8")
+
+    assert latest_import_csv(today="20260101") == tmp_path / "import_20260101.csv"
+
+
+def test_latest_import_csv_returns_none_when_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+
+    assert latest_import_csv(today="20260101") is None
+
+
+def _write_sync_config(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "error.json")
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "offres_csv_headers": ["ID", "Traite", "Raison_exclusion"],
+                "sheets_sync": {
+                    "spreadsheet_id": "sheet-id",
+                    "sheet_name": "Offres",
+                    "reference_sheet_name": "Références",
+                    "reference_row_b": 2,
+                    "reference_row_r": 3,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_import_csv(tmp_path, today: str) -> None:
+    import_path = tmp_path / f"import_{today}.csv"
+    with import_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["ID", "Traite", "Raison_exclusion"], delimiter=";")
+        writer.writeheader()
+        writer.writerow({"ID": "E000002", "Traite": "FALSE", "Raison_exclusion": ""})
+
+
+def test_run_dry_run_does_not_write(tmp_path, monkeypatch):
+    _write_sync_config(tmp_path, monkeypatch)
+    _write_import_csv(tmp_path, "20260101")
+
+    fake_service = MagicMock()
+    fake_service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Offres"}},
+            {"properties": {"sheetId": 558063207, "title": "Références"}},
+        ]
+    }
+    values_get = fake_service.spreadsheets.return_value.values.return_value.get
+    values_get.return_value.execute.return_value = {"values": [["E000001"]]}
+    with patch("sheets_sync.get_sheets_service", return_value=fake_service):
+        run(dry_run=True, today="20260101")
+
+    fake_service.spreadsheets.return_value.values.return_value.update.assert_not_called()
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_writes_error_state_on_exception(tmp_path, monkeypatch):
+    _write_sync_config(tmp_path, monkeypatch)
+    _write_import_csv(tmp_path, "20260101")
+
+    with patch("sheets_sync.get_sheets_service", side_effect=RuntimeError("API quota exceeded")):
+        with pytest.raises(RuntimeError):
+            run(dry_run=False, today="20260101")
+
+    state = read_error_state()
+    assert "API quota exceeded" in state["message"]
+
+
+def test_run_skips_when_no_import_csv_found(tmp_path, monkeypatch, capsys):
+    _write_sync_config(tmp_path, monkeypatch)
+
+    run(dry_run=True, today="20260101")
+
+    assert "Aucun fichier d'import" in capsys.readouterr().out
+
+
+def test_run_copies_formatting_before_writing_values(tmp_path, monkeypatch):
+    """Order matters: copy_reference_formatting must run before
+    write_new_rows, or the final values would get overwritten by the
+    placeholder from the copy step instead of the other way around."""
+    _write_sync_config(tmp_path, monkeypatch)
+    _write_import_csv(tmp_path, "20260101")
+
+    call_order = []
+    fake_service = MagicMock()
+    values_get = fake_service.spreadsheets.return_value.values.return_value.get
+    values_get.return_value.execute.return_value = {"values": []}
+    fake_service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Offres"}},
+            {"properties": {"sheetId": 558063207, "title": "Références"}},
+        ]
+    }
+
+    def record_batch_update(**kwargs):
+        call_order.append("copy_reference_formatting")
+        return MagicMock()
+
+    def record_values_update(**kwargs):
+        call_order.append("write_new_rows")
+        return MagicMock()
+
+    fake_service.spreadsheets.return_value.batchUpdate.side_effect = record_batch_update
+    fake_service.spreadsheets.return_value.values.return_value.update.side_effect = (
+        record_values_update
+    )
+
+    with patch("sheets_sync.get_sheets_service", return_value=fake_service):
+        run(dry_run=False, today="20260101")
+
+    assert call_order == [
+        "copy_reference_formatting",
+        "copy_reference_formatting",
+        "write_new_rows",
+    ]
