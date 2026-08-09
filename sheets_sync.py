@@ -10,6 +10,7 @@ Usage:
     python3 sheets_sync.py --ack-error
 """
 
+import argparse
 import csv
 import json
 from datetime import UTC, datetime
@@ -469,3 +470,23 @@ def run(dry_run: bool, today: str | None = None) -> None:
     except Exception as e:
         write_error_state(str(e))
         raise
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--ack-error", action="store_true")
+    args = parser.parse_args(argv)
+
+    if args.ack_error:
+        clear_error_state()
+        print("Etat d'erreur Sheets sync acquitte.")
+        return
+
+    run(dry_run=args.dry_run)
+
+
+if __name__ == "__main__":
+    main()

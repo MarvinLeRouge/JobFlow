@@ -14,6 +14,7 @@ from sheets_sync import (
     get_last_data_row,
     get_sheet_id,
     latest_import_csv,
+    main,
     offer_id_number,
     read_error_state,
     read_import_rows,
@@ -738,3 +739,31 @@ def test_extend_conditional_format_ranges_does_nothing_when_no_rules():
     extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
 
     service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_main_ack_error_clears_error_state_and_does_not_run_sync(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.clear_error_state", lambda: calls.append("cleared"))
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(("run", dry_run)))
+
+    main(["--ack-error"])
+
+    assert calls == ["cleared"]
+
+
+def test_main_dry_run_calls_run_with_dry_run_true(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(dry_run))
+
+    main(["--dry-run"])
+
+    assert calls == [True]
+
+
+def test_main_no_args_calls_run_with_dry_run_false(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(dry_run))
+
+    main([])
+
+    assert calls == [False]
