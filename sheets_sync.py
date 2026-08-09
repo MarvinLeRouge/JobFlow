@@ -148,6 +148,40 @@ def row_values(row: dict, headers: list[str], row_number: int) -> list:
     return values
 
 
+def ensure_sheet_rows(service, spreadsheet_id: str, sheet_id: int, needed_row_count: int) -> None:
+    """Grow the sheet's grid if it doesn't already have at least
+    needed_row_count rows. A Sheets grid has a fixed row count that must be
+    explicitly extended via appendDimension before writing beyond it -
+    copyPaste/values.update both fail with a 400 error otherwise (confirmed
+    live against the duplicated test sheet)."""
+    meta = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets(properties.sheetId,properties.gridProperties.rowCount)",
+        )
+        .execute()
+    )
+    sheet = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == sheet_id)
+    current_row_count = sheet["properties"]["gridProperties"]["rowCount"]
+
+    if needed_row_count <= current_row_count:
+        return
+
+    body = {
+        "requests": [
+            {
+                "appendDimension": {
+                    "sheetId": sheet_id,
+                    "dimension": "ROWS",
+                    "length": needed_row_count - current_row_count,
+                }
+            }
+        ]
+    }
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+
 def copy_reference_formatting(
     service,
     spreadsheet_id: str,
@@ -268,6 +302,8 @@ def run(dry_run: bool, today: str | None = None) -> None:
         template_row = get_last_data_row(service, spreadsheet_id, sheet_name)
         start_row = template_row + 1
         end_row = start_row + len(new_rows) - 1
+
+        ensure_sheet_rows(service, spreadsheet_id, sheet_id, needed_row_count=end_row)
 
         traite_col_index = headers.index("Traite")
         raison_col_index = headers.index("Raison_exclusion")
