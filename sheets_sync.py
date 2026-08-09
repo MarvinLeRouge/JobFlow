@@ -14,6 +14,11 @@ import csv
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from googleapiclient.discovery import build
+
+import auth
 
 ROOT = Path(__file__).parent
 CONFIG_FILE = ROOT / "config" / "config.json"
@@ -24,6 +29,8 @@ SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 TOKEN_SHEETS_FILE = ROOT / "token_sheets.json"
 
 ERROR_STATE_FILE = LOGS_DIR / "sheets_sync_error.json"
+
+LOCAL_TZ = ZoneInfo("Europe/Paris")
 
 
 def write_error_state(message: str) -> None:
@@ -98,3 +105,199 @@ def read_last_synced_id(service, spreadsheet_id: str, sheet_name: str) -> int:
     values = result.get("values", [])
     ids = [offer_id_number(row[0]) for row in values if row]
     return max(ids) if ids else 0
+
+
+def get_sheets_service():
+    creds = auth.get_credentials(scopes=SHEETS_SCOPES, token_file=TOKEN_SHEETS_FILE)
+    return build("sheets", "v4", credentials=creds)
+
+
+def get_sheet_id(service, spreadsheet_id: str, sheet_name: str) -> int:
+    """Numeric sheetId for a given tab name."""
+    meta = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        .execute()
+    )
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["title"] == sheet_name:
+            return sheet["properties"]["sheetId"]
+    raise ValueError(f"Sheet tab not found: {sheet_name!r}")
+
+
+def get_last_data_row(service, spreadsheet_id: str, sheet_name: str) -> int:
+    """1-indexed sheet row number of the last row containing data (row 1 is
+    the header). Returns 1 for a header-only sheet."""
+    result = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"{sheet_name}!A:A")
+        .execute()
+    )
+    return len(result.get("values", []))
+
+
+def row_values(row: dict, headers: list[str], row_number: int) -> list:
+    """Ordered cell values for one CSV row, in the sheet's column order.
+    The 'Traite' column is always replaced with the live formula
+    '=R{row_number}<>""' instead of the CSV's static default, so it stays
+    driven by column R rather than a fixed value."""
+    values = [row.get(h, "") for h in headers]
+    traite_index = headers.index("Traite")
+    values[traite_index] = f'=R{row_number}<>""'
+    return values
+
+
+def copy_reference_formatting(
+    service,
+    spreadsheet_id: str,
+    sheet_id: int,
+    reference_sheet_id: int,
+    reference_row: int,
+    column_index: int,
+    start_row: int,
+    end_row: int,
+) -> None:
+    """Copy one column's dropdown validation and colors (plus a disposable
+    placeholder value) from a reference cell in the References tab onto
+    rows [start_row, end_row] (1-indexed, inclusive) of the given 0-indexed
+    column. The placeholder value gets overwritten by write_new_rows() right
+    after - a plain values.update never disturbs validation/format,
+    confirmed live against the duplicated test sheet."""
+    body = {
+        "requests": [
+            {
+                "copyPaste": {
+                    "source": {
+                        "sheetId": reference_sheet_id,
+                        "startRowIndex": reference_row - 1,
+                        "endRowIndex": reference_row,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2,
+                    },
+                    "destination": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": start_row - 1,
+                        "endRowIndex": end_row,
+                        "startColumnIndex": column_index,
+                        "endColumnIndex": column_index + 1,
+                    },
+                    "pasteType": "PASTE_NORMAL",
+                }
+            }
+        ]
+    }
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+
+def write_new_rows(
+    service,
+    spreadsheet_id: str,
+    sheet_name: str,
+    rows: list[dict],
+    headers: list[str],
+    start_row: int,
+) -> None:
+    """Write the final values for rows into columns A..(last header),
+    starting at start_row (1-indexed). Must run AFTER
+    copy_reference_formatting for columns B and R, so this write's values
+    (including the correct per-row Traite formula) become the final content
+    without disturbing the validation/colors copied a moment earlier."""
+    if not rows:
+        return
+    end_row = start_row + len(rows) - 1
+    last_col = chr(ord("A") + len(headers) - 1)
+    values = [row_values(row, headers, row_number=start_row + i) for i, row in enumerate(rows)]
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{sheet_name}!A{start_row}:{last_col}{end_row}",
+        valueInputOption="USER_ENTERED",
+        body={"values": values},
+    ).execute()
+
+
+def latest_import_csv(today: str | None = None) -> Path | None:
+    """Path to today's output/import_YYYYMMDD.csv, or None if it doesn't
+    exist (e.g. extract_eml.py found nothing new to write this run)."""
+    if today is None:
+        today = datetime.now(LOCAL_TZ).strftime("%Y%m%d")
+    path = OUTPUT_DIR / f"import_{today}.csv"
+    return path if path.exists() else None
+
+
+def run(dry_run: bool, today: str | None = None) -> None:
+    check_error_gate()
+
+    config = load_config()
+    sync_config = config["sheets_sync"]
+    spreadsheet_id = sync_config["spreadsheet_id"]
+    sheet_name = sync_config["sheet_name"]
+    reference_sheet_name = sync_config["reference_sheet_name"]
+    reference_row_b = sync_config["reference_row_b"]
+    reference_row_r = sync_config["reference_row_r"]
+    headers = config["offres_csv_headers"]
+
+    import_csv = latest_import_csv(today=today)
+    if import_csv is None:
+        print("Aucun fichier d'import a synchroniser aujourd'hui.")
+        return
+
+    import_rows = read_import_rows(import_csv)
+
+    try:
+        service = get_sheets_service()
+        sheet_id = get_sheet_id(service, spreadsheet_id, sheet_name)
+        reference_sheet_id = get_sheet_id(service, spreadsheet_id, reference_sheet_name)
+
+        last_synced_id = read_last_synced_id(service, spreadsheet_id, sheet_name)
+        new_rows = rows_to_sync(import_rows, last_synced_id)
+
+        if not new_rows:
+            print("Aucune nouvelle offre a synchroniser (deja a jour).")
+            return
+
+        print(
+            f"{len(new_rows)} nouvelle(s) offre(s) a synchroniser "
+            f"(IDs {new_rows[0]['ID']} a {new_rows[-1]['ID']})"
+        )
+
+        if dry_run:
+            print("[DRY-RUN] Rien ecrit.")
+            return
+
+        template_row = get_last_data_row(service, spreadsheet_id, sheet_name)
+        start_row = template_row + 1
+        end_row = start_row + len(new_rows) - 1
+
+        traite_col_index = headers.index("Traite")
+        raison_col_index = headers.index("Raison_exclusion")
+
+        copy_reference_formatting(
+            service,
+            spreadsheet_id,
+            sheet_id,
+            reference_sheet_id,
+            reference_row_b,
+            traite_col_index,
+            start_row,
+            end_row,
+        )
+        copy_reference_formatting(
+            service,
+            spreadsheet_id,
+            sheet_id,
+            reference_sheet_id,
+            reference_row_r,
+            raison_col_index,
+            start_row,
+            end_row,
+        )
+        write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
+
+        print(
+            f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
+            f"(lignes {start_row}-{end_row})"
+        )
+    except Exception as e:
+        write_error_state(str(e))
+        raise
