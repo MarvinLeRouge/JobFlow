@@ -8,6 +8,7 @@ from sheets_sync import (
     check_error_gate,
     clear_error_state,
     copy_reference_formatting,
+    ensure_sheet_rows,
     get_last_data_row,
     get_sheet_id,
     latest_import_csv,
@@ -194,6 +195,31 @@ def test_get_last_data_row_returns_one_for_header_only_sheet():
     assert get_last_data_row(service, "sheet-id", "Offres") == 1
 
 
+def test_ensure_sheet_rows_does_nothing_when_grid_already_big_enough():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0, "gridProperties": {"rowCount": 6000}}}]
+    }
+
+    ensure_sheet_rows(service, "sheet-id", sheet_id=0, needed_row_count=5278)
+
+    service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_ensure_sheet_rows_extends_grid_when_too_small():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0, "gridProperties": {"rowCount": 5276}}}]
+    }
+
+    ensure_sheet_rows(service, "sheet-id", sheet_id=0, needed_row_count=5278)
+
+    service.spreadsheets.return_value.batchUpdate.assert_called_once_with(
+        spreadsheetId="sheet-id",
+        body={"requests": [{"appendDimension": {"sheetId": 0, "dimension": "ROWS", "length": 2}}]},
+    )
+
+
 def test_copy_reference_formatting_builds_correct_copypaste_request():
     service = MagicMock()
 
@@ -371,9 +397,11 @@ def test_run_skips_when_no_import_csv_found(tmp_path, monkeypatch, capsys):
 
 
 def test_run_copies_formatting_before_writing_values(tmp_path, monkeypatch):
-    """Order matters: copy_reference_formatting must run before
-    write_new_rows, or the final values would get overwritten by the
-    placeholder from the copy step instead of the other way around."""
+    """Order matters: ensure_sheet_rows must run before
+    copy_reference_formatting, which itself must run before write_new_rows,
+    or the final values would get overwritten by the placeholder from the
+    copy step instead of the other way around, and copyPaste would fail
+    against a grid that hasn't been grown yet."""
     _write_sync_config(tmp_path, monkeypatch)
     _write_import_csv(tmp_path, "20260101")
 
@@ -388,6 +416,9 @@ def test_run_copies_formatting_before_writing_values(tmp_path, monkeypatch):
         ]
     }
 
+    def record_ensure_sheet_rows(*args, **kwargs):
+        call_order.append("ensure_sheet_rows")
+
     def record_batch_update(**kwargs):
         call_order.append("copy_reference_formatting")
         return MagicMock()
@@ -401,10 +432,14 @@ def test_run_copies_formatting_before_writing_values(tmp_path, monkeypatch):
         record_values_update
     )
 
-    with patch("sheets_sync.get_sheets_service", return_value=fake_service):
+    with (
+        patch("sheets_sync.get_sheets_service", return_value=fake_service),
+        patch("sheets_sync.ensure_sheet_rows", side_effect=record_ensure_sheet_rows),
+    ):
         run(dry_run=False, today="20260101")
 
     assert call_order == [
+        "ensure_sheet_rows",
         "copy_reference_formatting",
         "copy_reference_formatting",
         "write_new_rows",
