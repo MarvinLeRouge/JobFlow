@@ -224,6 +224,31 @@ def copy_reference_formatting(
     service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
 
+def rows_needing_r_dropdown(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
+    """Contiguous (start, end) 1-indexed row ranges among the new rows whose
+    Raison_exclusion is empty - only these rows should get column R's
+    dropdown validation applied. Rows with a pre-filled exclusion reason
+    (e.g. extract_eml.py's blacklist marker) keep their plain value with no
+    validation, so Sheets never shows a 'not in list' warning triangle on
+    an automatically-determined value - confirmed needed live, the warning
+    appeared on a row whose Raison_exclusion came from the CSV, not from
+    the user picking a dropdown option."""
+    ranges = []
+    range_start = None
+    for i, row in enumerate(rows):
+        row_number = start_row + i
+        if not row.get("Raison_exclusion", ""):
+            if range_start is None:
+                range_start = row_number
+        else:
+            if range_start is not None:
+                ranges.append((range_start, row_number - 1))
+                range_start = None
+    if range_start is not None:
+        ranges.append((range_start, start_row + len(rows) - 1))
+    return ranges
+
+
 def write_new_rows(
     service,
     spreadsheet_id: str,
@@ -318,16 +343,17 @@ def run(dry_run: bool, today: str | None = None) -> None:
             start_row,
             end_row,
         )
-        copy_reference_formatting(
-            service,
-            spreadsheet_id,
-            sheet_id,
-            reference_sheet_id,
-            reference_row_r,
-            raison_col_index,
-            start_row,
-            end_row,
-        )
+        for r_start, r_end in rows_needing_r_dropdown(new_rows, start_row):
+            copy_reference_formatting(
+                service,
+                spreadsheet_id,
+                sheet_id,
+                reference_sheet_id,
+                reference_row_r,
+                raison_col_index,
+                r_start,
+                r_end,
+            )
         write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
 
         print(
