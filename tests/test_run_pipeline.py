@@ -42,6 +42,8 @@ def test_run_pipeline_passes_since_days_to_fetch(monkeypatch):
     )
     monkeypatch.setattr(run_pipeline.rename_eml, "run", lambda dry_run, purge: None)
     monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "check_error_gate", lambda: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "run", lambda dry_run: None)
 
     run_pipeline.run_pipeline(dry_run=True, since_days=30)
 
@@ -57,6 +59,8 @@ def test_run_pipeline_defaults_since_days_to_none(monkeypatch):
     )
     monkeypatch.setattr(run_pipeline.rename_eml, "run", lambda dry_run, purge: None)
     monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "check_error_gate", lambda: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "run", lambda dry_run: None)
 
     run_pipeline.run_pipeline(dry_run=True)
 

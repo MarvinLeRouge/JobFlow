@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml.
+"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml -> sheets_sync.
 
 Usage:
     python3 run_pipeline.py [--dry-run] [--since-days N]
