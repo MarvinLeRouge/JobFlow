@@ -237,13 +237,17 @@ Add a new top-level key (keep the rest of the file untouched):
 ```json
   "sheets_sync": {
     "spreadsheet_id": "",
-    "sheet_name": "Offres"
+    "sheet_name": "Offres",
+    "reference_sheet_name": "Références",
+    "reference_row_r": 3
   },
 ```
 
+`reference_sheet_name`/`reference_row_r` point at the dedicated "Références" tab created during the Task 1 spike, which holds a template cell for column R's dropdown (kept empty by default). Discovered live during the spike, not guessed - see Task 6 for how it's used.
+
 - [ ] **Step 2 (manual): Fill in the real values**
 
-Set `spreadsheet_id` to your **duplicated test sheet's** ID (the long ID in its URL, between `/d/` and `/edit`) — never the real sheet's ID at this stage. Confirm `sheet_name` matches your actual tab name (adjust the `"Offres"` placeholder above if your tab is named differently).
+Set `spreadsheet_id` to your **duplicated test sheet's** ID (the long ID in its URL, between `/d/` and `/edit`) — never the real sheet's ID at this stage. Confirm `sheet_name`/`reference_sheet_name` match your actual tab names, and `reference_row_r` matches the row of your "Colonne R dropdown" reference cell (adjust the defaults above if yours differ).
 
 - [ ] **Step 3: Commit**
 
@@ -567,11 +571,640 @@ EOF
 
 ---
 
-### Task 6 and Task 7: to be written after Task 1's live findings
+### Task 6: `sheets_sync.py` — write new rows' values and column B's formula
 
-**Do not write these tasks yet.** Task 6 (writing new rows' values and column B's formula into the sheet) and Task 7 (extending row-level conditional formatting to the new rows) both need the exact formula text, dropdown values/colors, and conditional format rule definitions that only Task 1's live run against the duplicated sheet reveals. Writing them now would mean guessing at real values instead of transcribing them — exactly what Task 1 exists to avoid.
+Written after live investigation against the duplicated sheet (see the design discussion in the plan's originating conversation). Key facts that shaped this task, verified live rather than guessed:
 
-Once Task 1's output has been reviewed together, amend this plan document to insert the fully-specified Task 6 and Task 7 here, following the same TDD structure as every other task, then continue with Task 8 below (which only depends on their interface, not their internals).
+- Column B (`Traite`) holds a **formula**, `=R{row}<>""` (TRUE when `Raison_exclusion` is non-blank), plus a `ONE_OF_LIST` dropdown (`FALSE`/`TRUE`/`"En cours"`) with per-value colors. The colors are **not readable via the Sheets API** (confirmed: a fully unrestricted cell read shows no color field anywhere on the dropdown). They **are** correctly reproduced by the API's `copyPaste` action (`pasteType: PASTE_NORMAL`) from an existing correctly-configured B cell — confirmed by a live test (copied cell showed working colored dropdown). Relative formula references auto-adjust per destination row on copy-paste, exactly like a manual copy-paste (confirmed live: copying a `=R3529<>""` cell to a different row and column correctly shifted both the row number and the column letter).
+- Column R (`Raison_exclusion`) is a **plain value** (not a formula on real data rows) — either empty, or `"Blacklisté: <term>"` already written by `extract_eml.py` into the CSV. It needs the same 6-value dropdown (`Non précisé`/`Hors stack`/`Hors compétences`/`Hors profil`/`Hors zone géo`/`Stage/Alternance`) applied via `copyPaste` with `pasteType: PASTE_DATA_VALIDATION` (validation only, doesn't disturb the value already written) from a dedicated reference cell — a "Références" tab was created during the spike specifically so this template value stays empty by default (per explicit request: new rows must never default to a pre-filled reason).
+- `output/import_YYYYMMDD.csv`'s column order already matches the sheet's column order (`A..U`) exactly, since both come from `config.json`'s `offres_csv_headers` (now ending in `Message_ID`, column `U`).
+
+**Files:**
+- Modify: `sheets_sync.py`
+- Test: `tests/test_sheets_sync.py`
+
+**Interfaces:**
+- Consumes: `read_import_rows`, `rows_to_sync`, `read_last_synced_id` (Task 4), `check_error_gate`, `write_error_state` (Task 5), `auth.get_credentials` (Task 2), `config["sheets_sync"]["reference_sheet_name"]`/`["reference_row_r"]` (Task 3).
+- Produces: `get_sheets_service() -> Resource`, `get_sheet_id(service, spreadsheet_id, sheet_name) -> int`, `get_last_data_row(service, spreadsheet_id, sheet_name) -> int`, `row_values(row, headers) -> list`, `write_new_rows(service, spreadsheet_id, sheet_name, rows, headers, start_row) -> None`, `copy_column_b_formula(service, spreadsheet_id, sheet_id, template_row, start_row, end_row) -> None`, `copy_column_r_validation(service, spreadsheet_id, sheet_id, reference_sheet_id, reference_row, start_row, end_row) -> None`, `latest_import_csv(today: str | None = None) -> Path | None`, `run(dry_run: bool) -> None`. `run()` is consumed by Task 7 (which extends its body) and Task 8 (`run_pipeline.py`).
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# Add to tests/test_sheets_sync.py
+import json
+from unittest.mock import MagicMock, patch
+
+
+def test_row_values_orders_by_headers():
+    row = {"ID": "E000001", "Titre": "Dev", "Source": "Indeed"}
+    headers = ["ID", "Source", "Titre"]
+
+    assert row_values(row, headers) == ["E000001", "Indeed", "Dev"]
+
+
+def test_row_values_defaults_missing_fields_to_empty_string():
+    row = {"ID": "E000001"}
+    headers = ["ID", "Message_ID"]
+
+    assert row_values(row, headers) == ["E000001", ""]
+
+
+def test_get_sheet_id_finds_matching_title():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Offres"}},
+            {"properties": {"sheetId": 558063207, "title": "Références"}},
+        ]
+    }
+
+    assert get_sheet_id(service, "sheet-id", "Références") == 558063207
+
+
+def test_get_sheet_id_raises_when_not_found():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0, "title": "Offres"}}]
+    }
+
+    with pytest.raises(ValueError):
+        get_sheet_id(service, "sheet-id", "Nonexistent")
+
+
+def test_get_last_data_row_counts_column_a_values():
+    service = MagicMock()
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.get.return_value.execute.return_value = {
+        "values": [["ID"], ["E000001"], ["E000002"]]
+    }
+
+    assert get_last_data_row(service, "sheet-id", "Offres") == 3
+
+
+def test_get_last_data_row_returns_one_for_header_only_sheet():
+    service = MagicMock()
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.get.return_value.execute.return_value = {"values": [["ID"]]}
+
+    assert get_last_data_row(service, "sheet-id", "Offres") == 1
+
+
+def test_write_new_rows_calls_values_update_with_correct_range():
+    service = MagicMock()
+    headers = ["ID", "Titre"]
+    rows = [{"ID": "E000010", "Titre": "Dev A"}, {"ID": "E000011", "Titre": "Dev B"}]
+
+    write_new_rows(service, "sheet-id", "Offres", rows, headers, start_row=100)
+
+    values_resource = service.spreadsheets.return_value.values.return_value
+    values_resource.update.assert_called_once_with(
+        spreadsheetId="sheet-id",
+        range="Offres!A100:B101",
+        valueInputOption="USER_ENTERED",
+        body={"values": [["E000010", "Dev A"], ["E000011", "Dev B"]]},
+    )
+
+
+def test_write_new_rows_does_nothing_for_empty_list():
+    service = MagicMock()
+
+    write_new_rows(service, "sheet-id", "Offres", [], ["ID"], start_row=100)
+
+    service.spreadsheets.return_value.values.return_value.update.assert_not_called()
+
+
+def test_copy_column_b_formula_builds_correct_copypaste_request():
+    service = MagicMock()
+
+    copy_column_b_formula(service, "sheet-id", sheet_id=0, template_row=5276, start_row=5277, end_row=5279)
+
+    service.spreadsheets.return_value.batchUpdate.assert_called_once_with(
+        spreadsheetId="sheet-id",
+        body={
+            "requests": [{
+                "copyPaste": {
+                    "source": {
+                        "sheetId": 0,
+                        "startRowIndex": 5275, "endRowIndex": 5276,
+                        "startColumnIndex": 1, "endColumnIndex": 2,
+                    },
+                    "destination": {
+                        "sheetId": 0,
+                        "startRowIndex": 5276, "endRowIndex": 5279,
+                        "startColumnIndex": 1, "endColumnIndex": 2,
+                    },
+                    "pasteType": "PASTE_NORMAL",
+                }
+            }]
+        },
+    )
+
+
+def test_copy_column_r_validation_uses_paste_data_validation_type():
+    service = MagicMock()
+
+    copy_column_r_validation(
+        service, "sheet-id", sheet_id=0, reference_sheet_id=558063207,
+        reference_row=3, start_row=5277, end_row=5279,
+    )
+
+    body = service.spreadsheets.return_value.batchUpdate.call_args.kwargs["body"]
+    request = body["requests"][0]["copyPaste"]
+    assert request["pasteType"] == "PASTE_DATA_VALIDATION"
+    assert request["source"] == {
+        "sheetId": 558063207,
+        "startRowIndex": 2, "endRowIndex": 3,
+        "startColumnIndex": 1, "endColumnIndex": 2,
+    }
+    assert request["destination"] == {
+        "sheetId": 0,
+        "startRowIndex": 5276, "endRowIndex": 5279,
+        "startColumnIndex": 17, "endColumnIndex": 18,
+    }
+
+
+def test_latest_import_csv_returns_path_when_file_exists(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    (tmp_path / "import_20260101.csv").write_text("", encoding="utf-8")
+
+    assert latest_import_csv(today="20260101") == tmp_path / "import_20260101.csv"
+
+
+def test_latest_import_csv_returns_none_when_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+
+    assert latest_import_csv(today="20260101") is None
+
+
+def test_run_dry_run_does_not_write(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "error.json")
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    (tmp_path / "config.json").write_text(json.dumps({
+        "offres_csv_headers": ["ID", "Traite"],
+        "sheets_sync": {
+            "spreadsheet_id": "sheet-id", "sheet_name": "Offres",
+            "reference_sheet_name": "Références", "reference_row_r": 3,
+        },
+    }), encoding="utf-8")
+    import_path = tmp_path / "import_20260101.csv"
+    with import_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["ID", "Traite"], delimiter=";")
+        writer.writeheader()
+        writer.writerow({"ID": "E000002", "Traite": "FALSE"})
+
+    fake_service = MagicMock()
+    fake_service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+        "values": [["ID"], ["E000001"]]
+    }
+    with patch("sheets_sync.get_sheets_service", return_value=fake_service):
+        run(dry_run=True, today="20260101")
+
+    fake_service.spreadsheets.return_value.values.return_value.update.assert_not_called()
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_writes_error_state_on_exception(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "error.json")
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    (tmp_path / "config.json").write_text(json.dumps({
+        "offres_csv_headers": ["ID", "Traite"],
+        "sheets_sync": {
+            "spreadsheet_id": "sheet-id", "sheet_name": "Offres",
+            "reference_sheet_name": "Références", "reference_row_r": 3,
+        },
+    }), encoding="utf-8")
+    import_path = tmp_path / "import_20260101.csv"
+    with import_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["ID", "Traite"], delimiter=";")
+        writer.writeheader()
+        writer.writerow({"ID": "E000002", "Traite": "FALSE"})
+
+    with patch("sheets_sync.get_sheets_service", side_effect=RuntimeError("API quota exceeded")):
+        with pytest.raises(RuntimeError):
+            run(dry_run=False, today="20260101")
+
+    state = read_error_state()
+    assert "API quota exceeded" in state["message"]
+
+
+def test_run_skips_when_no_import_csv_found(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "error.json")
+    monkeypatch.setattr("sheets_sync.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    (tmp_path / "config.json").write_text(json.dumps({
+        "offres_csv_headers": ["ID"],
+        "sheets_sync": {
+            "spreadsheet_id": "sheet-id", "sheet_name": "Offres",
+            "reference_sheet_name": "Références", "reference_row_r": 3,
+        },
+    }), encoding="utf-8")
+
+    run(dry_run=True, today="20260101")
+
+    assert "Aucun fichier d'import" in capsys.readouterr().out
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: the new tests FAIL (`ImportError`/`AttributeError`/`NameError` for the not-yet-defined names), the 12 tests from Tasks 4-5 still PASS.
+
+- [ ] **Step 3: Add to `sheets_sync.py`**
+
+Add near the top imports:
+
+```python
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from googleapiclient.discovery import build
+```
+
+Add near the other module constants:
+
+```python
+LOCAL_TZ = ZoneInfo("Europe/Paris")
+```
+
+Add the following functions (after the Task 4/5 functions):
+
+```python
+def get_sheets_service():
+    creds = auth.get_credentials(scopes=SHEETS_SCOPES, token_file=TOKEN_SHEETS_FILE)
+    return build("sheets", "v4", credentials=creds)
+
+
+def get_sheet_id(service, spreadsheet_id: str, sheet_name: str) -> int:
+    """Numeric sheetId for a given tab name."""
+    meta = service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id, fields="sheets.properties"
+    ).execute()
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["title"] == sheet_name:
+            return sheet["properties"]["sheetId"]
+    raise ValueError(f"Sheet tab not found: {sheet_name!r}")
+
+
+def get_last_data_row(service, spreadsheet_id: str, sheet_name: str) -> int:
+    """1-indexed sheet row number of the last row containing data (row 1 is
+    the header). Returns 1 for a header-only sheet."""
+    result = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id, range=f"{sheet_name}!A:A"
+    ).execute()
+    return len(result.get("values", []))
+
+
+def row_values(row: dict, headers: list[str]) -> list:
+    """Ordered cell values for one CSV row, in the sheet's column order."""
+    return [row.get(h, "") for h in headers]
+
+
+def write_new_rows(service, spreadsheet_id: str, sheet_name: str, rows: list[dict],
+                    headers: list[str], start_row: int) -> None:
+    """Write rows as plain values into columns A..(last header), starting at
+    start_row (1-indexed). Column B's real formula/validation/colors are set
+    separately by copy_column_b_formula - this write's column B value is
+    disposable, it gets overwritten right after."""
+    if not rows:
+        return
+    end_row = start_row + len(rows) - 1
+    last_col = chr(ord("A") + len(headers) - 1)
+    values = [row_values(row, headers) for row in rows]
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"{sheet_name}!A{start_row}:{last_col}{end_row}",
+        valueInputOption="USER_ENTERED",
+        body={"values": values},
+    ).execute()
+
+
+def copy_column_b_formula(service, spreadsheet_id: str, sheet_id: int,
+                           template_row: int, start_row: int, end_row: int) -> None:
+    """Copy column B's formula/dropdown/colors from template_row (1-indexed,
+    an existing correctly-configured row) onto rows [start_row, end_row]
+    (1-indexed, inclusive). Relative references auto-adjust per destination
+    row, matching manual copy-paste behavior (verified live)."""
+    body = {
+        "requests": [{
+            "copyPaste": {
+                "source": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": template_row - 1, "endRowIndex": template_row,
+                    "startColumnIndex": 1, "endColumnIndex": 2,
+                },
+                "destination": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": start_row - 1, "endRowIndex": end_row,
+                    "startColumnIndex": 1, "endColumnIndex": 2,
+                },
+                "pasteType": "PASTE_NORMAL",
+            }
+        }]
+    }
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+
+def copy_column_r_validation(service, spreadsheet_id: str, sheet_id: int,
+                              reference_sheet_id: int, reference_row: int,
+                              start_row: int, end_row: int) -> None:
+    """Copy column R's dropdown validation only (not its value) from a
+    reference cell onto rows [start_row, end_row] (1-indexed, inclusive).
+    Does not disturb the values write_new_rows already wrote there."""
+    body = {
+        "requests": [{
+            "copyPaste": {
+                "source": {
+                    "sheetId": reference_sheet_id,
+                    "startRowIndex": reference_row - 1, "endRowIndex": reference_row,
+                    "startColumnIndex": 1, "endColumnIndex": 2,
+                },
+                "destination": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": start_row - 1, "endRowIndex": end_row,
+                    "startColumnIndex": 17, "endColumnIndex": 18,
+                },
+                "pasteType": "PASTE_DATA_VALIDATION",
+            }
+        }]
+    }
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+
+def latest_import_csv(today: str | None = None) -> Path | None:
+    """Path to today's output/import_YYYYMMDD.csv, or None if it doesn't
+    exist (e.g. extract_eml.py found nothing new to write this run)."""
+    if today is None:
+        today = datetime.now(LOCAL_TZ).strftime("%Y%m%d")
+    path = OUTPUT_DIR / f"import_{today}.csv"
+    return path if path.exists() else None
+
+
+def run(dry_run: bool, today: str | None = None) -> None:
+    check_error_gate()
+
+    config = load_config()
+    sync_config = config["sheets_sync"]
+    spreadsheet_id = sync_config["spreadsheet_id"]
+    sheet_name = sync_config["sheet_name"]
+    reference_sheet_name = sync_config["reference_sheet_name"]
+    reference_row_r = sync_config["reference_row_r"]
+    headers = config["offres_csv_headers"]
+
+    import_csv = latest_import_csv(today=today)
+    if import_csv is None:
+        print("Aucun fichier d'import a synchroniser aujourd'hui.")
+        return
+
+    import_rows = read_import_rows(import_csv)
+
+    try:
+        service = get_sheets_service()
+        sheet_id = get_sheet_id(service, spreadsheet_id, sheet_name)
+        reference_sheet_id = get_sheet_id(service, spreadsheet_id, reference_sheet_name)
+
+        last_synced_id = read_last_synced_id(service, spreadsheet_id, sheet_name)
+        new_rows = rows_to_sync(import_rows, last_synced_id)
+
+        if not new_rows:
+            print("Aucune nouvelle offre a synchroniser (deja a jour).")
+            return
+
+        print(f"{len(new_rows)} nouvelle(s) offre(s) a synchroniser "
+              f"(IDs {new_rows[0]['ID']} a {new_rows[-1]['ID']})")
+
+        if dry_run:
+            print("[DRY-RUN] Rien ecrit.")
+            return
+
+        template_row = get_last_data_row(service, spreadsheet_id, sheet_name)
+        start_row = template_row + 1
+        end_row = start_row + len(new_rows) - 1
+
+        write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
+        copy_column_b_formula(service, spreadsheet_id, sheet_id, template_row, start_row, end_row)
+        copy_column_r_validation(service, spreadsheet_id, sheet_id, reference_sheet_id,
+                                  reference_row_r, start_row, end_row)
+
+        print(f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
+              f"(lignes {start_row}-{end_row})")
+    except Exception as e:
+        write_error_state(str(e))
+        raise
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: 27 passed
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add sheets_sync.py tests/test_sheets_sync.py
+git commit -m "$(cat <<'EOF'
+feat: write new rows and replicate column B formula/dropdown
+
+Modified files:
+- sheets_sync.py - write_new_rows, copy_column_b_formula, copy_column_r_validation, latest_import_csv, run(): writes new offer rows and reproduces column B's live formula/dropdown/colors via copyPaste, verified live against a duplicated test sheet
+- tests/test_sheets_sync.py - unit tests for all new functions, Sheets API mocked throughout
+EOF
+)"
+```
+
+- [ ] **Step 6 (manual): Verify live against the duplicated sheet with 2+ rows**
+
+The row-offset auto-adjustment on `copyPaste` was verified live for a single-row copy (Task 1's investigation). Before trusting this for real, run `sheets_sync.py` (not `--dry-run`) against the duplicated test sheet with an import CSV containing at least 2 new rows, and visually confirm each new row's column B shows a correctly distinct, working formula/dropdown (not all rows referencing the same source row).
+
+---
+
+### Task 7: `sheets_sync.py` — extend row-level conditional formatting
+
+Investigation finding: all 4 data-row conditional format rules (alternance/stage highlight, blacklist highlight, duplicate highlight, and the "En cours" highlight) are bounded to the sheet's row count at the time they were last configured — not just the "En cours" one as first suspected. None of them auto-extend to newly appended rows. Per explicit confirmation, "En cours" stays scoped to column A only (not widened to a full row); the other three already span the full column range and keep that scope.
+
+**Files:**
+- Modify: `sheets_sync.py`
+- Test: `tests/test_sheets_sync.py`
+
+**Interfaces:**
+- Consumes: nothing new from earlier tasks beyond what Task 6 already uses.
+- Produces: `extend_conditional_format_ranges(service, spreadsheet_id, sheet_id, new_end_row) -> None`. Called by `run()` (extended below) after the write/copy steps from Task 6.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# Add to tests/test_sheets_sync.py
+def test_extend_conditional_format_ranges_skips_header_rule():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{
+            "properties": {"sheetId": 0},
+            "conditionalFormats": [
+                {
+                    "ranges": [{"startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 26}],
+                    "booleanRule": {"condition": {"type": "NOT_BLANK"}, "format": {}},
+                },
+            ],
+        }]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_extend_conditional_format_ranges_updates_data_row_rules():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{
+            "properties": {"sheetId": 0},
+            "conditionalFormats": [
+                {
+                    "ranges": [{"startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 26}],
+                    "booleanRule": {"condition": {"type": "NOT_BLANK"}, "format": {}},
+                },
+                {
+                    "ranges": [{"startRowIndex": 1, "endRowIndex": 5276, "startColumnIndex": 0, "endColumnIndex": 26}],
+                    "booleanRule": {
+                        "condition": {"type": "CUSTOM_FORMULA", "values": [{"userEnteredValue": '=$H2<>""'}]},
+                        "format": {"backgroundColor": {"red": 1, "green": 0.9490196, "blue": 0.8}},
+                    },
+                },
+                {
+                    "ranges": [{"startRowIndex": 1, "endRowIndex": 3625, "startColumnIndex": 0, "endColumnIndex": 1}],
+                    "booleanRule": {
+                        "condition": {"type": "CUSTOM_FORMULA", "values": [{"userEnteredValue": '=($B2="En cours")'}]},
+                        "format": {"backgroundColor": {"red": 0.40392157, "green": 0.30588236, "blue": 0.654902}},
+                    },
+                },
+            ],
+        }]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    body = service.spreadsheets.return_value.batchUpdate.call_args.kwargs["body"]
+    requests = body["requests"]
+    assert len(requests) == 2  # header rule (index 0) skipped, 2 data-row rules updated
+
+    duplicate_update = requests[0]["updateConditionalFormatRule"]
+    assert duplicate_update["sheetId"] == 0
+    assert duplicate_update["index"] == 1
+    assert duplicate_update["rule"]["ranges"][0]["endRowIndex"] == 6000
+    assert duplicate_update["rule"]["ranges"][0]["startColumnIndex"] == 0
+    assert duplicate_update["rule"]["ranges"][0]["endColumnIndex"] == 26
+    assert duplicate_update["rule"]["booleanRule"]["condition"]["values"][0]["userEnteredValue"] == '=$H2<>""'
+
+    en_cours_update = requests[1]["updateConditionalFormatRule"]
+    assert en_cours_update["index"] == 2
+    assert en_cours_update["rule"]["ranges"][0]["endRowIndex"] == 6000
+    assert en_cours_update["rule"]["ranges"][0]["startColumnIndex"] == 0
+    assert en_cours_update["rule"]["ranges"][0]["endColumnIndex"] == 1  # column A only, unchanged
+
+
+def test_extend_conditional_format_ranges_does_nothing_when_no_rules():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0}, "conditionalFormats": []}]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    service.spreadsheets.return_value.batchUpdate.assert_not_called()
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: the 3 new tests FAIL (`NameError: name 'extend_conditional_format_ranges' is not defined`), the 27 from Task 6 still PASS.
+
+- [ ] **Step 3: Add to `sheets_sync.py`**
+
+```python
+def extend_conditional_format_ranges(service, spreadsheet_id: str, sheet_id: int,
+                                      new_end_row: int) -> None:
+    """Extend every data-row conditional format rule's endRowIndex to
+    new_end_row (0-indexed, exclusive - the sheet's new total row count
+    after appending). The header-row highlight (starts at row 0) is left
+    untouched. Each rule's column scope (e.g. 'En cours' limited to column
+    A) is preserved exactly as configured - only endRowIndex changes."""
+    meta = service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id,
+        fields="sheets(properties.sheetId,conditionalFormats)",
+    ).execute()
+    sheet = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == sheet_id)
+    rules = sheet.get("conditionalFormats", [])
+
+    requests = []
+    for index, rule in enumerate(rules):
+        ranges = rule.get("ranges", [])
+        if not ranges or ranges[0].get("startRowIndex", 0) == 0:
+            continue
+        updated_rule = json.loads(json.dumps(rule))
+        for r in updated_rule["ranges"]:
+            r["endRowIndex"] = new_end_row
+        requests.append({
+            "updateConditionalFormatRule": {
+                "sheetId": sheet_id,
+                "index": index,
+                "rule": updated_rule,
+            }
+        })
+
+    if requests:
+        service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests}).execute()
+```
+
+- [ ] **Step 4: Modify `run()` to call it after the copy steps**
+
+In `sheets_sync.py`'s `run()` function, replace:
+
+```python
+        write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
+        copy_column_b_formula(service, spreadsheet_id, sheet_id, template_row, start_row, end_row)
+        copy_column_r_validation(service, spreadsheet_id, sheet_id, reference_sheet_id,
+                                  reference_row_r, start_row, end_row)
+
+        print(f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
+              f"(lignes {start_row}-{end_row})")
+```
+
+with:
+
+```python
+        write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
+        copy_column_b_formula(service, spreadsheet_id, sheet_id, template_row, start_row, end_row)
+        copy_column_r_validation(service, spreadsheet_id, sheet_id, reference_sheet_id,
+                                  reference_row_r, start_row, end_row)
+        extend_conditional_format_ranges(service, spreadsheet_id, sheet_id, new_end_row=end_row)
+
+        print(f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
+              f"(lignes {start_row}-{end_row})")
+```
+
+- [ ] **Step 5: Run tests to verify everything passes**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: 30 passed
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add sheets_sync.py tests/test_sheets_sync.py
+git commit -m "$(cat <<'EOF'
+feat: extend conditional formatting ranges on sync
+
+Modified files:
+- sheets_sync.py - extend_conditional_format_ranges() extends all data-row conditional format rules to cover newly synced rows, wired into run(); the range-clipping problem the user described applies to all 4 data-row rules, not just "En cours"
+- tests/test_sheets_sync.py - tests covering header-rule skip, endRowIndex extension, column-scope preservation, and the no-rules edge case
+EOF
+)"
+```
+
+- [ ] **Step 7 (manual): Verify live and visually confirm formatting extends correctly**
+
+Run `sheets_sync.py` against the duplicated test sheet again (real run, not `--dry-run`) with new rows to sync, then visually check the sheet: new rows should show correct duplicate/blacklist/alternance highlighting where applicable, and manually setting one new row's column B to `"En cours"` should show the dark purple highlight in column A only.
 
 ---
 
