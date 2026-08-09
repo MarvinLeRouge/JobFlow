@@ -57,6 +57,8 @@ Before writing any production sync logic, a spike task reads the duplicated shee
 
 This avoids the user having to manually transcribe formulas/colors, and validates early that the Sheets API actually exposes everything needed before any production code is written against assumptions.
 
+**Outcome (supersedes the plan above):** the spike found that dropdown/validation colors are not exposed by the Sheets API at all, confirmed with a fully unrestricted `fields` query - only the formula and the validation rule itself are readable, not the fill colors tied to each dropdown value. Transcribing colors verbatim into code, as planned above, turned out to be impossible. The implementation instead keeps a permanent, live dependency: `copy_reference_formatting()` copies formatting straight from two reference cells in the "Références" tab (`reference_row_b`, `reference_row_r`) onto every newly-synced row via `copyPaste`, on every single sync run, not just once at initial setup. See Operational Notes below for the risk this introduces.
+
 ## Trigger and Gating
 
 - `run_pipeline.py` calls `sheets_sync.run(dry_run=dry_run)` as its 4th and final step, same fail-fast pattern as the existing three steps.
@@ -69,6 +71,12 @@ This avoids the user having to manually transcribe formulas/colors, and validate
 - On failure, `sheets_sync.py` writes a small persistent error-state file (timestamp, error message) rather than just letting the exception propagate and vanish.
 - **Gate scope:** `run_pipeline.py` and `sheets_sync.py` both refuse to start (print the recorded error and stop) while this error-state file exists — the user must not lose track of an unresolved Sheets failure across later runs. `fetch_gmail.py`, `rename_eml.py`, and `extract_eml.py` remain usable individually even with a pending unacknowledged error, since blocking them would only hinder investigating the failure, not help.
 - Acknowledgment clears the state: `sheets_sync.py --ack-error` (no separate acknowledgment script/tool).
+
+## Operational Notes
+
+The "Références" tab is a live, ongoing dependency, not a one-time setup aid. `copy_reference_formatting()` reads `reference_row_b` and `reference_row_r` from the `reference_sheet_name` tab and `copyPaste`s their formatting onto every newly-synced row, on every sync run - because dropdown/validation colors turned out not to be readable via the Sheets API at all (see Phase 1 above), live copy-paste from a reference cell is the only way to reproduce them.
+
+Nothing in the sheet or the code enforces this tab's internal structure. If the user reorders rows within it (e.g. inserts a row above row 2), or clears/changes the formatting or dropdown validation on the reference cells themselves, every future sync silently copies wrong or missing formatting onto new rows. This is not caught by the error gate: `get_sheet_id()` only raises when a tab is renamed or deleted outright, it has no way to detect that a tab's internal row structure changed.
 
 ## Data Flow / Idempotency
 

@@ -149,6 +149,18 @@ Fail-fast: the pipeline stops at the first step that raises, so a later step nev
 
 ---
 
+### `inspect_sheet_formatting.py`
+
+One-off diagnostic tool built during `sheets_sync.py`'s feasibility spike, not part of the regular pipeline. Prints a sheet's cell formulas, data validation rules, and conditional formatting, read directly via the Sheets API, to inspect exactly what needs to be replicated.
+
+```bash
+python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
+```
+
+Run only against a duplicated **test** sheet, never production. Files written: none, prints to stdout.
+
+---
+
 ## Gmail OAuth2 setup
 
 `fetch_gmail.py` needs a Google Cloud project with the Gmail API enabled and a one-time OAuth2 authorization (`credentials.json` and `token.json`, both git-ignored). See `docs/setup_gmail_auth.md` for the full walkthrough, including the "Access blocked" testing-mode pitfall and how to verify a silent token refresh.
@@ -184,6 +196,12 @@ Fail-fast: the pipeline stops at the first step that raises, so a later step nev
 | `reference_row_r` | row number in the reference tab holding column R's (`Raison_exclusion`) dropdown to copy |
 
 > The current `spreadsheet_id` points at a duplicated **test** sheet, not the production tracking sheet - see [Migration](#migration-one-time-after-upgrading) above before using `sheets_sync.py` for real.
+
+#### Important: the Références tab is a live dependency
+
+The `reference_sheet_name` tab is not a one-time setup aid: `sheets_sync.py` reads `reference_row_b` and `reference_row_r` on **every sync run**, not just once, and copies their formatting onto each newly-appended row. This is because dropdown/validation colors turned out not to be readable via the Sheets API at all, so live copy-paste from these two reference cells is the only way to reproduce them.
+
+Nothing enforces this tab's structure. Reordering rows in it (e.g. inserting a row above row 2), or clearing/changing the formatting or dropdown validation on the reference cells themselves, makes every future sync silently copy wrong or missing formatting onto new rows - with no error and no error-gate trip. The error gate only catches the tab being renamed or deleted outright, not its internal rows changing.
 
 ### `config/scraping_patterns.json`
 

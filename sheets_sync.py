@@ -257,7 +257,12 @@ def rows_needing_r_clear(rows: list[dict], start_row: int) -> list[tuple[int, in
     validation from the row above them regardless of what gets explicitly
     copied afterward - confirmed live: a row deliberately excluded from
     rows_needing_r_dropdown's copy still showed the inherited validation
-    until cleared."""
+    until cleared.
+
+    This is an intentional structural mirror of rows_needing_r_dropdown
+    (same contiguous-range walk, with the Raison_exclusion truthiness check
+    inverted), kept as a separate function rather than consolidated into
+    one, so each stays simple and independently testable."""
     ranges = []
     range_start = None
     for i, row in enumerate(rows):
