@@ -149,6 +149,18 @@ Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'un
 
 ---
 
+### `inspect_sheet_formatting.py`
+
+Outil de diagnostic ponctuel construit pendant le spike de faisabilité de `sheets_sync.py`, ne fait pas partie du pipeline habituel. Affiche les formules de cellules, les règles de validation des données et la mise en forme conditionnelle d'une feuille, lues directement via l'API Sheets, pour inspecter précisément ce qui doit être reproduit.
+
+```bash
+python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
+```
+
+À utiliser uniquement sur une feuille **de test** dupliquée, jamais en production. Fichiers écrits : aucun, affichage sur la sortie standard.
+
+---
+
 ## Configuration OAuth2 Gmail
 
 `fetch_gmail.py` nécessite un projet Google Cloud avec l'API Gmail activée et une autorisation OAuth2 réalisée une seule fois (`credentials.json` et `token.json`, tous deux exclus du dépôt). Voir `docs/setup_gmail_auth.md` pour le pas-à-pas complet, y compris le piège de l'erreur "Access blocked" en mode test et la vérification du rafraîchissement silencieux du token.
@@ -184,6 +196,12 @@ Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'un
 | `reference_row_r` | numéro de ligne dans l'onglet de référence contenant la liste déroulante de la colonne R (`Raison_exclusion`) à copier |
 
 > Le `spreadsheet_id` actuel pointe vers une feuille **de test** dupliquée, pas vers la feuille de suivi de production - voir [Migration](#migration-une-seule-fois-après-mise-à-jour) ci-dessus avant toute utilisation réelle de `sheets_sync.py`.
+
+#### Important : l'onglet Références est une dépendance active
+
+L'onglet `reference_sheet_name` n'est pas une aide de configuration ponctuelle : `sheets_sync.py` lit `reference_row_b` et `reference_row_r` à **chaque synchronisation**, pas une seule fois, et copie leur mise en forme sur chaque ligne nouvellement ajoutée. C'est parce que les couleurs des listes déroulantes/validations se sont révélées illisibles via l'API Sheets, la copie en direct depuis ces deux cellules de référence est donc le seul moyen de les reproduire.
+
+Rien ne protège la structure de cet onglet. Réordonner les lignes qu'il contient (par exemple insérer une ligne au-dessus de la ligne 2), ou effacer/modifier la mise en forme ou la validation des listes déroulantes sur les cellules de référence elles-mêmes, fait que chaque synchronisation future copiera silencieusement une mise en forme incorrecte ou absente sur les nouvelles lignes - sans erreur et sans déclenchement du verrou d'erreur. Le verrou d'erreur ne détecte que le renommage ou la suppression pure et simple de l'onglet, pas un changement de sa structure interne.
 
 ### `config/scraping_patterns.json`
 
