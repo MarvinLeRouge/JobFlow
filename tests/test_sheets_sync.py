@@ -3,7 +3,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sheets_sync import offer_id_number, read_import_rows, read_last_synced_id, rows_to_sync
+from sheets_sync import (
+    check_error_gate,
+    clear_error_state,
+    offer_id_number,
+    read_error_state,
+    read_import_rows,
+    read_last_synced_id,
+    rows_to_sync,
+    write_error_state,
+)
 
 
 def test_offer_id_number_extracts_the_numeric_suffix():
@@ -63,3 +72,48 @@ def test_read_last_synced_id_returns_zero_when_sheet_has_no_data_rows():
     result = read_last_synced_id(service, "sheet-id", "Offres")
 
     assert result == 0
+
+
+def test_write_then_read_error_state_round_trips(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+
+    write_error_state("Sheets API quota exceeded")
+    state = read_error_state()
+
+    assert state["message"] == "Sheets API quota exceeded"
+    assert "recorded_at" in state
+
+
+def test_read_error_state_returns_none_when_no_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+
+    assert read_error_state() is None
+
+
+def test_clear_error_state_removes_the_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+    write_error_state("some error")
+
+    clear_error_state()
+
+    assert read_error_state() is None
+
+
+def test_clear_error_state_is_a_no_op_when_nothing_to_clear(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+
+    clear_error_state()  # must not raise
+
+
+def test_check_error_gate_raises_when_error_state_exists(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+    write_error_state("Sheets API quota exceeded")
+
+    with pytest.raises(SystemExit, match="Sheets API quota exceeded"):
+        check_error_gate()
+
+
+def test_check_error_gate_passes_silently_when_no_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.ERROR_STATE_FILE", tmp_path / "sheets_sync_error.json")
+
+    check_error_gate()  # must not raise
