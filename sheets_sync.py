@@ -12,6 +12,7 @@ Usage:
 
 import csv
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -21,6 +22,45 @@ OUTPUT_DIR = ROOT / "output"
 
 SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 TOKEN_SHEETS_FILE = ROOT / "token_sheets.json"
+
+ERROR_STATE_FILE = LOGS_DIR / "sheets_sync_error.json"
+
+
+def write_error_state(message: str) -> None:
+    ERROR_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ERROR_STATE_FILE.write_text(
+        json.dumps(
+            {
+                "message": message,
+                "recorded_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def read_error_state() -> dict | None:
+    if not ERROR_STATE_FILE.exists():
+        return None
+    with ERROR_STATE_FILE.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def clear_error_state() -> None:
+    ERROR_STATE_FILE.unlink(missing_ok=True)
+
+
+def check_error_gate() -> None:
+    """Raise SystemExit with the recorded error if an unacknowledged sync
+    failure exists. Called at the start of sheets_sync's own run() and of
+    run_pipeline.run_pipeline()."""
+    state = read_error_state()
+    if state is not None:
+        raise SystemExit(
+            f"Synchronisation Sheets bloquee : erreur non acquittee du {state['recorded_at']}\n"
+            f"  {state['message']}\n"
+            f"Acquitte avec : python3 sheets_sync.py --ack-error"
+        )
 
 
 def load_config() -> dict:
