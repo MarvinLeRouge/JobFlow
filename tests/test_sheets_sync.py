@@ -10,6 +10,7 @@ from sheets_sync import (
     clear_error_state,
     copy_reference_formatting,
     ensure_sheet_rows,
+    extend_conditional_format_ranges,
     get_last_data_row,
     get_sheet_id,
     latest_import_csv,
@@ -609,3 +610,131 @@ def test_run_clears_r_validation_only_on_rows_with_a_pre_filled_reason(tmp_path,
     clear_call = fake_clear_data_validation.call_args
     assert clear_call.args[3] == 2
     assert clear_call.args[4:] == (2, 2)
+
+
+def test_extend_conditional_format_ranges_skips_header_rule():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {
+                "properties": {"sheetId": 0},
+                "conditionalFormats": [
+                    {
+                        "ranges": [
+                            {
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 26,
+                            }
+                        ],
+                        "booleanRule": {"condition": {"type": "NOT_BLANK"}, "format": {}},
+                    },
+                ],
+            }
+        ]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_extend_conditional_format_ranges_updates_data_row_rules():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {
+                "properties": {"sheetId": 0},
+                "conditionalFormats": [
+                    {
+                        "ranges": [
+                            {
+                                "startRowIndex": 0,
+                                "endRowIndex": 1,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 26,
+                            }
+                        ],
+                        "booleanRule": {"condition": {"type": "NOT_BLANK"}, "format": {}},
+                    },
+                    {
+                        "ranges": [
+                            {
+                                "startRowIndex": 1,
+                                "endRowIndex": 5276,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 26,
+                            }
+                        ],
+                        "booleanRule": {
+                            "condition": {
+                                "type": "CUSTOM_FORMULA",
+                                "values": [{"userEnteredValue": '=$H2<>""'}],
+                            },
+                            "format": {
+                                "backgroundColor": {"red": 1, "green": 0.9490196, "blue": 0.8}
+                            },
+                        },
+                    },
+                    {
+                        "ranges": [
+                            {
+                                "startRowIndex": 1,
+                                "endRowIndex": 3625,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": 1,
+                            }
+                        ],
+                        "booleanRule": {
+                            "condition": {
+                                "type": "CUSTOM_FORMULA",
+                                "values": [{"userEnteredValue": '=($B2="En cours")'}],
+                            },
+                            "format": {
+                                "backgroundColor": {
+                                    "red": 0.40392157,
+                                    "green": 0.30588236,
+                                    "blue": 0.654902,
+                                }
+                            },
+                        },
+                    },
+                ],
+            }
+        ]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    body = service.spreadsheets.return_value.batchUpdate.call_args.kwargs["body"]
+    requests = body["requests"]
+    assert len(requests) == 2  # header rule (index 0) skipped, 2 data-row rules updated
+
+    duplicate_update = requests[0]["updateConditionalFormatRule"]
+    assert duplicate_update["sheetId"] == 0
+    assert duplicate_update["index"] == 1
+    assert duplicate_update["rule"]["ranges"][0]["endRowIndex"] == 6000
+    assert duplicate_update["rule"]["ranges"][0]["startColumnIndex"] == 0
+    assert duplicate_update["rule"]["ranges"][0]["endColumnIndex"] == 26
+    assert (
+        duplicate_update["rule"]["booleanRule"]["condition"]["values"][0]["userEnteredValue"]
+        == '=$H2<>""'
+    )
+
+    en_cours_update = requests[1]["updateConditionalFormatRule"]
+    assert en_cours_update["index"] == 2
+    assert en_cours_update["rule"]["ranges"][0]["endRowIndex"] == 6000
+    assert en_cours_update["rule"]["ranges"][0]["startColumnIndex"] == 0
+    assert en_cours_update["rule"]["ranges"][0]["endColumnIndex"] == 1  # column A only, unchanged
+
+
+def test_extend_conditional_format_ranges_does_nothing_when_no_rules():
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": 0}, "conditionalFormats": []}]
+    }
+
+    extend_conditional_format_ranges(service, "sheet-id", sheet_id=0, new_end_row=6000)
+
+    service.spreadsheets.return_value.batchUpdate.assert_not_called()

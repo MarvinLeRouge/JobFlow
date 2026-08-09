@@ -328,6 +328,49 @@ def write_new_rows(
     ).execute()
 
 
+def extend_conditional_format_ranges(
+    service, spreadsheet_id: str, sheet_id: int, new_end_row: int
+) -> None:
+    """Extend every data-row conditional format rule's endRowIndex to
+    new_end_row (0-indexed, exclusive - the sheet's new total row count
+    after appending). The header-row highlight (starts at row 0) is left
+    untouched. Each rule's column scope (e.g. 'En cours' limited to column
+    A) is preserved exactly as configured - only endRowIndex changes."""
+    meta = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets(properties.sheetId,conditionalFormats)",
+        )
+        .execute()
+    )
+    sheet = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == sheet_id)
+    rules = sheet.get("conditionalFormats", [])
+
+    requests = []
+    for index, rule in enumerate(rules):
+        ranges = rule.get("ranges", [])
+        if not ranges or ranges[0].get("startRowIndex", 0) == 0:
+            continue
+        updated_rule = json.loads(json.dumps(rule))
+        for r in updated_rule["ranges"]:
+            r["endRowIndex"] = new_end_row
+        requests.append(
+            {
+                "updateConditionalFormatRule": {
+                    "sheetId": sheet_id,
+                    "index": index,
+                    "rule": updated_rule,
+                }
+            }
+        )
+
+    if requests:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id, body={"requests": requests}
+        ).execute()
+
+
 def latest_import_csv(today: str | None = None) -> Path | None:
     """Path to today's output/import_YYYYMMDD.csv, or None if it doesn't
     exist (e.g. extract_eml.py found nothing new to write this run)."""
@@ -417,6 +460,7 @@ def run(dry_run: bool, today: str | None = None) -> None:
                 r_end,
             )
         write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
+        extend_conditional_format_ranges(service, spreadsheet_id, sheet_id, new_end_row=end_row)
 
         print(
             f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
