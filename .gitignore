@@ -10,4 +10,5 @@ __pycache__/
 .ruff_cache/
 token.json
 credentials.json
+token_sheets.json
 client_secret*.json
