@@ -1350,6 +1350,107 @@ EOF
 
 ---
 
+### Task 8bis: `sheets_sync.py` — standalone CLI entry point (`--dry-run`, `--ack-error`)
+
+Gap found during review of Task 8: `sheets_sync.py`'s own module docstring and the design doc both document `python3 sheets_sync.py [--dry-run]` and `python3 sheets_sync.py --ack-error` as the way to run the sync standalone and to acknowledge a blocked error state, and `check_error_gate()`'s own error message tells the user to run `python3 sheets_sync.py --ack-error`. None of this exists yet — the file has no `__main__` block at all. Task 8 only wires `sheets_sync.run()` into `run_pipeline.py`; it does not give `sheets_sync.py` a way to be invoked directly. This task closes that gap before Task 9 documents the flag.
+
+**Files:**
+- Modify: `sheets_sync.py`
+- Test: `tests/test_sheets_sync.py`
+
+**Interfaces:**
+- Consumes: `run(dry_run: bool) -> None` (Task 6/7), `clear_error_state() -> None` (Task 5).
+- Produces: `main(argv: list[str] | None = None) -> None`, plus the `if __name__ == "__main__":` guard calling `main()`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# Add to tests/test_sheets_sync.py
+def test_main_ack_error_clears_error_state_and_does_not_run_sync(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.clear_error_state", lambda: calls.append("cleared"))
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(("run", dry_run)))
+
+    main(["--ack-error"])
+
+    assert calls == ["cleared"]
+
+
+def test_main_dry_run_calls_run_with_dry_run_true(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(dry_run))
+
+    main(["--dry-run"])
+
+    assert calls == [True]
+
+
+def test_main_no_args_calls_run_with_dry_run_false(monkeypatch):
+    calls = []
+    monkeypatch.setattr("sheets_sync.run", lambda dry_run: calls.append(dry_run))
+
+    main([])
+
+    assert calls == [False]
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: the 3 new tests FAIL (`ImportError`/`NameError: name 'main' is not defined`), the rest still PASS.
+
+- [ ] **Step 3: Add to `sheets_sync.py`**
+
+Add `argparse` to the imports at the top:
+
+```python
+import argparse
+```
+
+Add at the end of the file:
+
+```python
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--ack-error", action="store_true")
+    args = parser.parse_args(argv)
+
+    if args.ack_error:
+        clear_error_state()
+        print("Etat d'erreur Sheets sync acquitte.")
+        return
+
+    run(dry_run=args.dry_run)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_sheets_sync.py -v`
+Expected: all pass, 0 failures, no regressions.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add sheets_sync.py tests/test_sheets_sync.py
+git commit -m "$(cat <<'EOF'
+feat: add sheets_sync.py standalone CLI entry point
+
+Modified files:
+- sheets_sync.py - main(argv) plus __main__ guard: --dry-run runs the sync directly, --ack-error clears a blocked error state without running a sync; closes the gap between the module docstring/design doc's documented usage and actual behavior
+- tests/test_sheets_sync.py - tests for --ack-error, --dry-run, and the no-args default
+EOF
+)"
+```
+
+---
+
 ### Task 9: Documentation
 
 **Files:**
@@ -1390,4 +1491,4 @@ EOF
 - Tasks 2, 3, 4, 5, 8, 9 are fully automatable.
 - Task 1 required the user's direct participation (running the spike script against the duplicated sheet, reviewing its output) - completed, see the plan's originating conversation for the full investigation trail.
 - Tasks 6 and 7 are now fully specified, based on Task 1's live findings plus a second live round of investigation into the exact write ordering needed to preserve dropdown colors (copy formatting from References first, write final values second - confirmed live that a plain values.update after a copyPaste does not disturb validation/formatting).
-- Remaining sequence: Task 3 → Task 5 → Task 6 (needs Task 3's config) → Task 7 (extends Task 6's `run()`) → Task 8 → Task 9. Tasks 3 and 5 have no dependency on each other and could be done in either order.
+- Remaining sequence: Task 3 → Task 5 → Task 6 (needs Task 3's config) → Task 7 (extends Task 6's `run()`) → Task 8 → Task 8bis (closes the CLI-entry-point gap found during Task 8's review, needs `run`/`clear_error_state`) → Task 9 (documents `--dry-run`/`--ack-error`, needs Task 8bis to exist first). Tasks 3 and 5 have no dependency on each other and could be done in either order.
