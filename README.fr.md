@@ -1,7 +1,7 @@
 # Job Search Tracker
 
 Pipeline Python de traitement des alertes emploi reçues par email.
-Les offres sont récupérées depuis Gmail, extraites des fichiers `.eml`, dédoublonnées, puis exportées en CSV pour import dans Google Sheets.
+Les offres sont récupérées depuis Gmail, extraites des fichiers `.eml`, dédoublonnées, puis synchronisées dans Google Sheets.
 
 ---
 
@@ -16,10 +16,14 @@ sources/<provider>/   ← fichiers .eml classés par plateforme
         ↓
   extract_eml.py      ← extraction des offres → CSV
         ↓
-output/import_YYYYMMDD.csv  ← à importer manuellement dans Google Sheets
+output/import_YYYYMMDD.csv  ← nouvelles offres du run, toujours produit
+        ↓
+  sheets_sync.py      ← ajoute les nouvelles lignes dans la Sheet, reproduit la mise en forme
+        ↓
+  Google Sheet         ← feuille de suivi principale
 ```
 
-`run_pipeline.py` enchaîne les trois étapes et constitue le point d'entrée recommandé.
+`run_pipeline.py` enchaîne les quatre étapes et constitue le point d'entrée recommandé.
 
 ---
 
@@ -51,6 +55,8 @@ Une fois les deux migrations réellement passées, `extract_eml.py` et `run_pipe
 ```bash
 python3 run_pipeline.py --since-days 30
 ```
+
+**Cible de la synchronisation Sheets :** `sheets_sync.py` lui-même ne nécessite aucune migration de données, mais `sheets_sync.spreadsheet_id` dans `config/config.json` pointe actuellement vers une feuille **de test** dupliquée, pas vers la feuille de suivi de production. Basculer vers l'ID réel de la feuille de production est une étape manuelle obligatoire avant toute utilisation réelle de `sheets_sync.py` ou `run_pipeline.py`.
 
 ---
 
@@ -109,25 +115,61 @@ Providers supportés : France Travail, Indeed (alertes + match direct), LinkedIn
 
 ---
 
+### `sheets_sync.py`
+
+Synchronise les nouvelles offres du dernier `output/import_YYYYMMDD.csv` vers la vraie feuille Google Sheets : compare l'ID d'offre le plus élevé déjà présent dans la feuille (colonne A) avec le CSV pour ne retenir que les lignes qu'elle n'a pas encore, les ajoute, reproduit la formule/liste déroulante de la colonne B (`Traite`) et la liste déroulante de la colonne R (`Raison_exclusion`) sur ces lignes en copiant la mise en forme depuis l'onglet dédié "Références", puis étend les règles de mise en forme conditionnelle au niveau des lignes (surlignage doublon/blacklist/alternance, statut "En cours" en colonne A) pour couvrir les lignes nouvellement ajoutées.
+
+```bash
+python3 sheets_sync.py             # synchroniser les nouvelles lignes vers la Sheet
+python3 sheets_sync.py --dry-run   # simulation, sans écriture, indique juste ce qui serait synchronisé
+python3 sheets_sync.py --ack-error # acquitter et effacer un état d'erreur bloquant
+```
+
+Il ne regarde que le `output/import_YYYYMMDD.csv` du **jour même**. Si `extract_eml.py` n'en a pas produit un aujourd'hui, il affiche un message et se termine sans erreur.
+
+**Verrou d'erreur :** en cas d'échec, le message d'erreur et l'horodatage sont enregistrés dans `logs/sheets_sync_error.json`. Chaque run suivant de `sheets_sync.py` ou de `run_pipeline.py` s'arrête alors immédiatement avec ce message, jusqu'à acquittement via `python3 sheets_sync.py --ack-error`. `fetch_gmail.py`, `rename_eml.py` et `extract_eml.py` ne sont pas affectés par ce verrou et restent utilisables individuellement.
+
+Fichiers écrits : rien de durable en local à part `logs/sheets_sync_error.json` en cas d'échec ; la feuille elle-même est la seule sortie persistante.
+
+---
+
 ### `run_pipeline.py`
 
-Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml`.
+Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync`.
 
 ```bash
 python3 run_pipeline.py                  # pipeline complet
-python3 run_pipeline.py --dry-run        # simuler les trois étapes
+python3 run_pipeline.py --dry-run        # simuler les quatre étapes
 python3 run_pipeline.py --since-days 30  # premier run après migration
 ```
 
 `--since-days` est transmis à `fetch_gmail.py`. Il est nécessaire pour le tout premier run après la [migration](#migration-une-seule-fois-après-mise-à-jour), car les entrées de ledger migrées ne comptent pas comme historique de fetch : sans lui, le run s'arrête sur "impossible de déterminer un point de départ".
 
-Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par une étape précédente.
+Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par une étape précédente. Il s'arrête aussi avant l'étape 1 si `sheets_sync.py` porte une erreur non acquittée d'un run précédent (voir le verrou d'erreur ci-dessus).
+
+---
+
+### `inspect_sheet_formatting.py`
+
+Outil de diagnostic ponctuel construit pendant le spike de faisabilité de `sheets_sync.py`, ne fait pas partie du pipeline habituel. Affiche les formules de cellules, les règles de validation des données et la mise en forme conditionnelle d'une feuille, lues directement via l'API Sheets, pour inspecter précisément ce qui doit être reproduit.
+
+```bash
+python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
+```
+
+À utiliser uniquement sur une feuille **de test** dupliquée, jamais en production. Fichiers écrits : aucun, affichage sur la sortie standard.
 
 ---
 
 ## Configuration OAuth2 Gmail
 
 `fetch_gmail.py` nécessite un projet Google Cloud avec l'API Gmail activée et une autorisation OAuth2 réalisée une seule fois (`credentials.json` et `token.json`, tous deux exclus du dépôt). Voir `docs/setup_gmail_auth.md` pour le pas-à-pas complet, y compris le piège de l'erreur "Access blocked" en mode test et la vérification du rafraîchissement silencieux du token.
+
+---
+
+## Configuration OAuth2 Google Sheets
+
+`sheets_sync.py` a besoin de son propre token OAuth2, `token_sheets.json` (exclu du dépôt), autorisé avec le scope `spreadsheets`. Il réutilise le même client OAuth que Gmail (`credentials.json`) mais garde un fichier de token séparé puisque les scopes diffèrent. Le premier run réel ouvre un navigateur pour l'écran de consentement une seule fois ; ensuite, `auth.get_credentials()` rafraîchit le token silencieusement, comme il le fait déjà pour Gmail.
 
 ---
 
@@ -141,6 +183,25 @@ Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'un
 | `stack_keywords` | mots-clés de détection de stack technique |
 | `ville_dept` | correspondance ville → numéro de département |
 | `blacklist_titres` | titres à marquer automatiquement (ex : "nounou", "garde d'enfant") |
+| `sheets_sync` | cible de synchronisation Sheets et coordonnées des cellules de référence, voir ci-dessous |
+
+#### `sheets_sync`
+
+| Clé | Rôle |
+|-----|------|
+| `spreadsheet_id` | ID de la feuille Google Sheets cible (visible dans son URL) |
+| `sheet_name` | nom de l'onglet contenant les offres (ex : `Offres`) |
+| `reference_sheet_name` | onglet contenant les cellules de référence dont `sheets_sync.py` copie la mise en forme (ex : `Références`) |
+| `reference_row_b` | numéro de ligne dans l'onglet de référence contenant la formule/liste déroulante de la colonne B (`Traite`) à copier |
+| `reference_row_r` | numéro de ligne dans l'onglet de référence contenant la liste déroulante de la colonne R (`Raison_exclusion`) à copier |
+
+> Le `spreadsheet_id` actuel pointe vers une feuille **de test** dupliquée, pas vers la feuille de suivi de production - voir [Migration](#migration-une-seule-fois-après-mise-à-jour) ci-dessus avant toute utilisation réelle de `sheets_sync.py`.
+
+#### Important : l'onglet Références est une dépendance active
+
+L'onglet `reference_sheet_name` n'est pas une aide de configuration ponctuelle : `sheets_sync.py` lit `reference_row_b` et `reference_row_r` à **chaque synchronisation**, pas une seule fois, et copie leur mise en forme sur chaque ligne nouvellement ajoutée. C'est parce que les couleurs des listes déroulantes/validations se sont révélées illisibles via l'API Sheets, la copie en direct depuis ces deux cellules de référence est donc le seul moyen de les reproduire.
+
+Rien ne protège la structure de cet onglet. Réordonner les lignes qu'il contient (par exemple insérer une ligne au-dessus de la ligne 2), ou effacer/modifier la mise en forme ou la validation des listes déroulantes sur les cellules de référence elles-mêmes, fait que chaque synchronisation future copiera silencieusement une mise en forme incorrecte ou absente sur les nouvelles lignes - sans erreur et sans déclenchement du verrou d'erreur. Le verrou d'erreur ne détecte que le renommage ou la suppression pure et simple de l'onglet, pas un changement de sa structure interne.
 
 ### `config/scraping_patterns.json`
 
@@ -201,9 +262,9 @@ La ligne est conservée dans le CSV et importée normalement dans Sheets.
 
 ## Google Sheets - import et mise en forme
 
-**Import :** Données → Importer → Ajouter à la fin de la feuille, en sélectionnant `output/import_YYYYMMDD.csv`.
+**Import :** désormais automatisé par `sheets_sync.py` (voir ci-dessus). L'import manuel (Données → Importer → Ajouter à la fin de la feuille, en sélectionnant `output/import_YYYYMMDD.csv`) n'est plus le chemin normal, mais reste utilisable en secours si `sheets_sync.py` est bloqué ou indisponible.
 
-**Mise en forme conditionnelle** (à configurer une fois, plage `A2:U`) :
+**Mise en forme conditionnelle** (configurée une fois sur la feuille, plage `A2:U`) :
 
 | Priorité | Couleur | Formule | Signification |
 |----------|---------|---------|---------------|
@@ -213,6 +274,8 @@ La ligne est conservée dans le CSV et importée normalement dans Sheets.
 > Colonnes de référence : A=ID, B=Traite, C=Date_decouverte, D=Source, E=Titre, F=Entreprise, G=Cle_dedup, H=Doublon_ID, I=Ville, J=Dept, K=Type_contrat, L=Salaire_min, M=Salaire_max, N=URL, O=URL_qualite, P=URL_redirect, Q=Stack, R=Raison_exclusion, S=Date_candidature, T=Notes, U=Message_ID
 >
 > Les colonnes A à T n'ont pas changé depuis avant l'intégration Gmail. `Message_ID` a été ajoutée en dernière position (U) plutôt qu'insérée, pour que les formules de mise en forme conditionnelle ci-dessus (et toute autre formule référençant une colonne par sa lettre) continuent de fonctionner sans modification.
+>
+> La feuille porte aussi deux autres règles au niveau des lignes non détaillées ici (surlignage alternance/stage et surlignage du statut "En cours", ce dernier limité à la colonne A). `sheets_sync.py` étend automatiquement la plage de lignes des quatre règles quand il ajoute de nouvelles lignes, en conservant la portée de colonnes propre à chacune.
 
 ---
 
@@ -240,4 +303,4 @@ pre-commit install   # une seule fois, pour activer le hook git
 
 ## Roadmap
 
-**L'automatisation de l'import Sheets** a été envisagée puis volontairement écartée pour l'instant : écrire les offres directement via l'API Google Sheets, plutôt que par l'import CSV manuel, nécessiterait un nouveau scope OAuth `spreadsheets`, la gestion d'écritures partielles sur un document partagé en direct, et ferait disparaître le filet de sécurité que constitue la relecture visuelle avant que les offres n'atterrissent dans la feuille de suivi principale. Ce point reste hors périmètre pour l'instant, à reconsidérer une fois la confiance dans la qualité de l'extraction automatique établie dans la durée : un projet à part entière, pas une tâche en attente sur celui-ci.
+**L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
