@@ -12,3 +12,5 @@ token.json
 credentials.json
 token_sheets.json
 client_secret*.json
+
+docs/ai/
