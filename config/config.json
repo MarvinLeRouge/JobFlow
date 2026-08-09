@@ -195,5 +195,12 @@
     "commercial immobilier",
     "indépendant immobilier",
     "néggociateur immobilier"
-  ]
+  ],
+  "sheets_sync": {
+    "spreadsheet_id": "REDACTED_TEST_SPREADSHEET_ID",
+    "sheet_name": "Offres",
+    "reference_sheet_name": "Références",
+    "reference_row_b": 2,
+    "reference_row_r": 3
+  }
 }
