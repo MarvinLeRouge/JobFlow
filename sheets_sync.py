@@ -23,6 +23,7 @@ import auth
 
 ROOT = Path(__file__).parent
 CONFIG_FILE = ROOT / "config" / "config.json"
+CONFIG_LOCAL_FILE = ROOT / "config" / "config.local.json"
 LOGS_DIR = ROOT / "logs"
 OUTPUT_DIR = ROOT / "output"
 
@@ -72,8 +73,17 @@ def check_error_gate() -> None:
 
 
 def load_config() -> dict:
+    """Load config.json, then merge config.local.json's sheets_sync keys over
+    it if present. spreadsheet_id lives only in the gitignored local file -
+    config.json stays committed with a placeholder, so the real spreadsheet
+    ID never ends up in git history."""
     with CONFIG_FILE.open(encoding="utf-8") as f:
-        return json.load(f)
+        config = json.load(f)
+    if CONFIG_LOCAL_FILE.exists():
+        with CONFIG_LOCAL_FILE.open(encoding="utf-8") as f:
+            local = json.load(f)
+        config.setdefault("sheets_sync", {}).update(local.get("sheets_sync", {}))
+    return config
 
 
 def offer_id_number(offer_id: str) -> int:
@@ -138,14 +148,26 @@ def get_last_data_row(service, spreadsheet_id: str, sheet_name: str) -> int:
     return len(result.get("values", []))
 
 
+FORCE_TEXT_COLUMNS = ("Source", "Dept")
+
+
 def row_values(row: dict, headers: list[str], row_number: int) -> list:
     """Ordered cell values for one CSV row, in the sheet's column order.
     The 'Traite' column is always replaced with the live formula
     '=R{row_number}<>""' instead of the CSV's static default, so it stays
-    driven by column R rather than a fixed value."""
+    driven by column R rather than a fixed value. FORCE_TEXT_COLUMNS get a
+    leading apostrophe - USER_ENTERED write mode otherwise lets Sheets
+    "smart"-reinterpret them (Source values like 'Talent.com' turned into
+    an auto-linked chip, Dept values like '06' turned into the number 6,
+    losing the leading zero), confirmed live against the production sheet."""
     values = [row.get(h, "") for h in headers]
     traite_index = headers.index("Traite")
     values[traite_index] = f'=R{row_number}<>""'
+    for col in FORCE_TEXT_COLUMNS:
+        if col in headers:
+            idx = headers.index(col)
+            if values[idx]:
+                values[idx] = f"'{values[idx]}"
     return values
 
 
