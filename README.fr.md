@@ -56,7 +56,7 @@ Une fois les deux migrations réellement passées, `extract_eml.py` et `run_pipe
 python3 run_pipeline.py --since-days 30
 ```
 
-**Cible de la synchronisation Sheets :** `sheets_sync.py` lui-même ne nécessite aucune migration de données, mais `sheets_sync.spreadsheet_id` dans `config/config.json` pointe actuellement vers une feuille **de test** dupliquée, pas vers la feuille de suivi de production. Basculer vers l'ID réel de la feuille de production est une étape manuelle obligatoire avant toute utilisation réelle de `sheets_sync.py` ou `run_pipeline.py`.
+**Cible de la synchronisation Sheets :** `sheets_sync.py` lui-même ne nécessite aucune migration de données, mais l'ID réel de la feuille doit être renseigné dans `config/config.local.json` (non versionné, voir [Configuration](#configuration) ci-dessous) avant toute utilisation réelle de `sheets_sync.py` ou `run_pipeline.py`.
 
 ---
 
@@ -189,13 +189,13 @@ python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
 
 | Clé | Rôle |
 |-----|------|
-| `spreadsheet_id` | ID de la feuille Google Sheets cible (visible dans son URL) |
+| `spreadsheet_id` | ID de la feuille Google Sheets cible (visible dans son URL) - voir note ci-dessous |
 | `sheet_name` | nom de l'onglet contenant les offres (ex : `Offres`) |
 | `reference_sheet_name` | onglet contenant les cellules de référence dont `sheets_sync.py` copie la mise en forme (ex : `Références`) |
 | `reference_row_b` | numéro de ligne dans l'onglet de référence contenant la formule/liste déroulante de la colonne B (`Traite`) à copier |
 | `reference_row_r` | numéro de ligne dans l'onglet de référence contenant la liste déroulante de la colonne R (`Raison_exclusion`) à copier |
 
-> Le `spreadsheet_id` actuel pointe vers une feuille **de test** dupliquée, pas vers la feuille de suivi de production - voir [Migration](#migration-une-seule-fois-après-mise-à-jour) ci-dessus avant toute utilisation réelle de `sheets_sync.py`.
+> `spreadsheet_id` n'est **pas** renseigné dans `config/config.json` (laissé vide, pour que ce fichier reste sans risque à committer). L'ID réel vit dans `config/config.local.json` (non versionné, fusionné par-dessus `config.json` par `sheets_sync.load_config()`), il ne se retrouve donc jamais dans l'historique git. Copier `config/config.local.json.example` vers `config/config.local.json` et y renseigner l'ID réel pour démarrer.
 
 #### Important : l'onglet Références est une dépendance active
 
