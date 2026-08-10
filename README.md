@@ -149,6 +149,35 @@ Fail-fast: the pipeline stops at the first step that raises, so a later step nev
 
 ---
 
+### `login_pipeline_check.py`
+
+Optional convenience layer on top of `run_pipeline.py`: prompts once per calendar day (not a strict 24h window) to run the pipeline, meant to be launched automatically at graphical login rather than run manually.
+
+Two-stage, both stages run this same script:
+
+```bash
+python3 login_pipeline_check.py           # launched by autostart, no terminal attached
+python3 login_pipeline_check.py --prompt  # launched by the step above, inside a terminal
+```
+
+Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated marker, not the fetch ledger, since a day with zero new emails never updates the ledger's `fetched_at`, which would break a once-per-day check) and exits silently if today's check already happened. If not, it relaunches itself inside a terminal via `x-terminal-emulator` (Debian's generic terminal alternative) with `--prompt`, which asks the user directly and runs `run_pipeline.py` (via the project's own `.venv`) if confirmed. The marker is stamped regardless of the answer, so it will not ask again until the next calendar day.
+
+**One-time local setup** (not managed by this repo): create an XDG autostart entry so a graphical login launches the check.
+
+```
+# ~/.config/autostart/jobflow-pipeline-check.desktop
+[Desktop Entry]
+Type=Application
+Name=JobFlow pipeline check
+Comment=Propose de lancer le pipeline JobFlow (une fois par jour maximum)
+Exec=/usr/bin/python3 /path/to/JobFlow/login_pipeline_check.py
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
+Hidden=false
+```
+
+---
+
 ### `inspect_sheet_formatting.py`
 
 One-off diagnostic tool built during `sheets_sync.py`'s feasibility spike, not part of the regular pipeline. Prints a sheet's cell formulas, data validation rules, and conditional formatting, read directly via the Sheets API, to inspect exactly what needs to be replicated.
