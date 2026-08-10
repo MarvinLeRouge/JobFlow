@@ -1,4 +1,17 @@
-# Job Search Tracker
+🇫🇷 Version française | [🇬🇧 English version](README.md)
+
+---
+
+# 🎯 JobFlow
+
+> *Un pipeline Python qui transforme des alertes emploi dispersées en un Google Sheet unique, dédoublonné, filtré et toujours à jour — du fetch Gmail à la feuille de suivi synchronisée.*
+
+![Status](https://img.shields.io/badge/Status-Production-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-148%20passants-brightgreen)
+![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)
+
+---
 
 Pipeline Python de traitement des alertes emploi reçues par email.
 Les offres sont récupérées depuis Gmail, extraites des fichiers `.eml`, dédoublonnées, puis synchronisées dans Google Sheets.
@@ -307,6 +320,29 @@ pre-commit install   # une seule fois, pour activer le hook git
 ## Roadmap
 
 **L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
+
+---
+
+## À propos
+
+Projet personnel à double objectif :
+
+- **Répondre à un besoin réel** — centraliser des alertes emploi dispersées entre six providers et jusqu'à une dizaine d'emails par jour dans un Google Sheet unique, dédoublonné, filtré et toujours à jour
+- **Portfolio** — démontre un pipeline structuré et testé : intégrations OAuth2 (Gmail + Sheets), parsing HTML par regex par provider, déduplication cross-provider, et un verrou d'erreur persistant qui protège la feuille de production contre les synchronisations partielles
+
+---
+
+## 🛠️ Stack technique
+
+| Couche | Technologie |
+|---|---|
+| Langage | ![Python](https://img.shields.io/badge/Python_3.13-3776AB?logo=python&logoColor=white&style=flat-square) |
+| Fetch email | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
+| Sync feuille | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
+| Géocodage fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
+| Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 148 tests |
+| Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
+| Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
 ---
 
