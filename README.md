@@ -1,4 +1,17 @@
-# Job Search Tracker
+[🇫🇷 Version française](README.fr.md) | 🇬🇧 English version
+
+---
+
+# 🎯 JobFlow
+
+> *A Python pipeline that turns scattered job alert emails into a deduplicated, filtered, always-current Google Sheet — from Gmail fetch to synced tracking sheet.*
+
+![Status](https://img.shields.io/badge/Status-Production-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-148%20passing-brightgreen)
+![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)
+
+---
 
 Python pipeline for processing job alert emails.
 Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and synced into Google Sheets.
@@ -307,6 +320,29 @@ pre-commit install   # once, to enable the git hook
 ## Roadmap
 
 **Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
+
+---
+
+## About
+
+Personal project with a dual purpose:
+
+- **Solve a real need** — centralize job alerts scattered across six providers and up to a dozen emails a day into one deduplicated, filtered, always-current Google Sheet
+- **Portfolio** — demonstrates a structured, tested pipeline: OAuth2 integrations (Gmail + Sheets), regex-based HTML parsing per provider, cross-provider deduplication, and a persistent error gate protecting the production sheet from partial syncs
+
+---
+
+## 🛠️ Tech stack
+
+| Layer | Technology |
+|---|---|
+| Language | ![Python](https://img.shields.io/badge/Python_3.13-3776AB?logo=python&logoColor=white&style=flat-square) |
+| Email fetch | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
+| Sheet sync | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
+| Geocoding fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
+| Testing | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 148 tests |
+| Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
+| Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
 ---
 
