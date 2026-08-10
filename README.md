@@ -3,6 +3,8 @@
 Python pipeline for processing job alert emails.
 Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and synced into Google Sheets.
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the design rationale behind the pipeline, the dedup strategy, and the provider parsers.
+
 ---
 
 ## Overview
@@ -97,7 +99,7 @@ Files written: `logs/email_ledger.json`.
 
 ### `extract_eml.py`
 
-Extracts offers from every `.eml` marked `PENDING` in the ledger, deduplicates them, detects the tech stack and blacklisted titles, then writes two CSV files.
+Extracts offers from every `.eml` marked `PENDING` in the ledger, deduplicates them, detects the tech stack and blacklisted titles, then writes two CSV files. `extract_eml.py` itself is a thin orchestrator; the actual parsing/filtering/IO logic lives in the `extract/` package (`extract/providers/` for the per-provider HTML parsers, `extract/filters.py` for dedup/blacklist/stack, `extract/geo.py` for city→département resolution, `extract/io.py` for CSV/log writing).
 
 ```bash
 python3 extract_eml.py                # full extraction
@@ -295,12 +297,19 @@ pre-commit install   # once, to enable the git hook
 
 1. Create `sources/<provider>/`
 2. Add an entry in `config/scraping_patterns.json`
-3. Implement `extract_<provider>(html, msg, patterns)` in `extract_eml.py`
-4. Add it to the `EXTRACTORS` table
-5. Test: `python3 extract_eml.py --dry-run`
+3. Implement `extract_<provider>(html, msg, patterns)` in a new `extract/providers/<provider>.py`
+4. Import it and add it to the `EXTRACTORS` table in `extract/providers/__init__.py`
+5. Add tests in `tests/extract/providers/test_<provider>.py`
+6. Test: `python3 extract_eml.py --dry-run`
 
 ---
 
 ## Roadmap
 
 **Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
+
+---
+
+## License
+
+[MIT](LICENSE)

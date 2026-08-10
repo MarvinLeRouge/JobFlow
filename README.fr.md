@@ -3,6 +3,8 @@
 Pipeline Python de traitement des alertes emploi reçues par email.
 Les offres sont récupérées depuis Gmail, extraites des fichiers `.eml`, dédoublonnées, puis synchronisées dans Google Sheets.
 
+Voir [ARCHITECTURE.fr.md](ARCHITECTURE.fr.md) pour les choix de conception derrière le pipeline, la stratégie de dédup et les parseurs providers.
+
 ---
 
 ## Fonctionnement général
@@ -97,7 +99,7 @@ Fichiers écrits : `logs/email_ledger.json`.
 
 ### `extract_eml.py`
 
-Extrait les offres de tous les `.eml` marqués `PENDING` dans le ledger, les dédoublonne, détecte la stack technique et les titres blacklistés, puis écrit deux fichiers CSV.
+Extrait les offres de tous les `.eml` marqués `PENDING` dans le ledger, les dédoublonne, détecte la stack technique et les titres blacklistés, puis écrit deux fichiers CSV. `extract_eml.py` lui-même est un point d'entrée fin ; le parsing/filtrage/I-O vit dans le package `extract/` (`extract/providers/` pour les parseurs HTML par provider, `extract/filters.py` pour dédup/blacklist/stack, `extract/geo.py` pour la résolution ville→département, `extract/io.py` pour l'écriture CSV/logs).
 
 ```bash
 python3 extract_eml.py             # extraction complète
@@ -295,12 +297,19 @@ pre-commit install   # une seule fois, pour activer le hook git
 
 1. Créer `sources/<provider>/`
 2. Ajouter une entrée dans `config/scraping_patterns.json`
-3. Implémenter `extract_<provider>(html, msg, patterns)` dans `extract_eml.py`
-4. L'ajouter dans la table `EXTRACTORS`
-5. Tester : `python3 extract_eml.py --dry-run`
+3. Implémenter `extract_<provider>(html, msg, patterns)` dans un nouveau `extract/providers/<provider>.py`
+4. L'importer et l'ajouter dans la table `EXTRACTORS` de `extract/providers/__init__.py`
+5. Ajouter des tests dans `tests/extract/providers/test_<provider>.py`
+6. Tester : `python3 extract_eml.py --dry-run`
 
 ---
 
 ## Roadmap
 
 **L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
+
+---
+
+## Licence
+
+[MIT](LICENSE)
