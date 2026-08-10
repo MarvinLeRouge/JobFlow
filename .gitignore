@@ -12,6 +12,7 @@ token.json
 credentials.json
 token_sheets.json
 client_secret*.json
+config/config.local.json
 
 docs/ai/
 backups/

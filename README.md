@@ -56,7 +56,7 @@ Once both migrations have run for real, `extract_eml.py` and `run_pipeline.py` c
 python3 run_pipeline.py --since-days 30
 ```
 
-**Sheets sync target:** `sheets_sync.py` itself needs no data migration, but `config/config.json`'s `sheets_sync.spreadsheet_id` currently points at a duplicated **test** sheet, not the real production tracking sheet. Switching it to the real spreadsheet's ID is a required manual step before relying on `sheets_sync.py` or `run_pipeline.py` for actual use.
+**Sheets sync target:** `sheets_sync.py` itself needs no data migration, but the real spreadsheet ID must be set in `config/config.local.json` (git-ignored, see [Configuration](#configuration) below) before relying on `sheets_sync.py` or `run_pipeline.py` for actual use.
 
 ---
 
@@ -189,13 +189,13 @@ Run only against a duplicated **test** sheet, never production. Files written: n
 
 | Key | Role |
 |-----|------|
-| `spreadsheet_id` | ID of the target Google Sheet (from its URL) |
+| `spreadsheet_id` | ID of the target Google Sheet (from its URL) - see note below |
 | `sheet_name` | tab name holding the offers (e.g. `Offres`) |
 | `reference_sheet_name` | tab holding the reference cells `sheets_sync.py` copies formatting from (e.g. `Références`) |
 | `reference_row_b` | row number in the reference tab holding column B's (`Traite`) formula/dropdown to copy |
 | `reference_row_r` | row number in the reference tab holding column R's (`Raison_exclusion`) dropdown to copy |
 
-> The current `spreadsheet_id` points at a duplicated **test** sheet, not the production tracking sheet - see [Migration](#migration-one-time-after-upgrading) above before using `sheets_sync.py` for real.
+> `spreadsheet_id` is **not** set in `config/config.json` (left as an empty placeholder there, so it stays safe to commit). The real ID lives in `config/config.local.json` (git-ignored, merged over `config.json` by `sheets_sync.load_config()`), so it never ends up in git history. Copy `config/config.local.json.example` to `config/config.local.json` and fill in the real spreadsheet ID to get started.
 
 #### Important: the Références tab is a live dependency
 
