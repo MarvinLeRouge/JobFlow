@@ -14,6 +14,7 @@ from sheets_sync import (
     get_last_data_row,
     get_sheet_id,
     latest_import_csv,
+    load_config,
     main,
     offer_id_number,
     read_error_state,
@@ -27,6 +28,38 @@ from sheets_sync import (
     write_error_state,
     write_new_rows,
 )
+
+
+def test_load_config_uses_config_json_when_no_local_override(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setattr("sheets_sync.CONFIG_LOCAL_FILE", tmp_path / "config.local.json")
+    (tmp_path / "config.json").write_text(
+        json.dumps({"sheets_sync": {"spreadsheet_id": "", "sheet_name": "Offres"}}),
+        encoding="utf-8",
+    )
+
+    config = load_config()
+
+    assert config["sheets_sync"]["spreadsheet_id"] == ""
+    assert config["sheets_sync"]["sheet_name"] == "Offres"
+
+
+def test_load_config_merges_local_spreadsheet_id_over_config_json(tmp_path, monkeypatch):
+    monkeypatch.setattr("sheets_sync.CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setattr("sheets_sync.CONFIG_LOCAL_FILE", tmp_path / "config.local.json")
+    (tmp_path / "config.json").write_text(
+        json.dumps({"sheets_sync": {"spreadsheet_id": "", "sheet_name": "Offres"}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "config.local.json").write_text(
+        json.dumps({"sheets_sync": {"spreadsheet_id": "real-prod-id"}}),
+        encoding="utf-8",
+    )
+
+    config = load_config()
+
+    assert config["sheets_sync"]["spreadsheet_id"] == "real-prod-id"
+    assert config["sheets_sync"]["sheet_name"] == "Offres"
 
 
 def test_offer_id_number_extracts_the_numeric_suffix():
@@ -158,6 +191,33 @@ def test_row_values_preserves_raison_exclusion_value():
     result = row_values(row, headers, row_number=200)
 
     assert result == ["E000002", '=R200<>""', "Blacklisté: nounou"]
+
+
+def test_row_values_force_texts_source_to_avoid_sheets_autolink():
+    row = {"ID": "E000001", "Traite": "FALSE", "Source": "Talent.com"}
+    headers = ["ID", "Traite", "Source"]
+
+    result = row_values(row, headers, row_number=100)
+
+    assert result == ["E000001", '=R100<>""', "'Talent.com"]
+
+
+def test_row_values_force_texts_dept_to_avoid_leading_zero_loss():
+    row = {"ID": "E000001", "Traite": "FALSE", "Dept": "06"}
+    headers = ["ID", "Traite", "Dept"]
+
+    result = row_values(row, headers, row_number=100)
+
+    assert result == ["E000001", '=R100<>""', "'06"]
+
+
+def test_row_values_does_not_force_text_empty_source_or_dept():
+    row = {"ID": "E000001", "Traite": "FALSE", "Source": "", "Dept": ""}
+    headers = ["ID", "Traite", "Source", "Dept"]
+
+    result = row_values(row, headers, row_number=100)
+
+    assert result == ["E000001", '=R100<>""', "", ""]
 
 
 def test_get_sheet_id_finds_matching_title():
