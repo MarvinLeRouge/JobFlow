@@ -12,9 +12,9 @@ Usage : python3 extract_eml.py [--dry-run]
 - Journalise              → logs/YYYYMMDD-HHMM_extraction.log
                             logs/extraction_history.csv
 
-Chaque run produit un fichier import_YYYYMMDD.csv contenant uniquement
-les nouvelles offres de ce run. À importer dans Google Sheets via
-Données → Importer → Ajouter aux données actuelles.
+Chaque run produit un fichier import_YYYYMMDD.csv autonome (avec en-tête),
+contenant uniquement les nouvelles offres de ce run, lu ensuite par
+sheets_sync.py pour la synchronisation automatique vers Google Sheets.
 """
 
 import argparse
@@ -770,11 +770,6 @@ def load_dedup_map() -> tuple[dict, int]:
     return dedup, max_e
 
 
-def has_prior_imports() -> bool:
-    """Retourne True si au moins un fichier import_*.csv existe déjà dans output/."""
-    return any(OUTPUT_DIR.glob("import_*.csv"))
-
-
 def ensure_offres_csv(headers: list, write_import_headers: bool):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if not OFFRES_CSV.exists():
@@ -846,13 +841,20 @@ def append_history(run_dt: datetime, stats: dict):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def main(dry_run: bool, force_headers: bool | None = None):
+def resolve_write_headers(force_headers: bool | None) -> tuple[bool, str]:
     """
     force_headers :
-      None  → automatique : headers si aucun import_*.csv existant, sinon sans
+      None  → automatique : toujours avec en-tête (chaque import_YYYYMMDD.csv
+              est un fichier autonome, lu par sheets_sync.py)
       True  → forcer headers (--with-headers)
       False → forcer sans headers (--no-headers)
     """
+    if force_headers is None:
+        return True, "auto (toujours avec en-tête)"
+    return force_headers, "forcé via --with-headers" if force_headers else "forcé via --no-headers"
+
+
+def main(dry_run: bool, force_headers: bool | None = None):
     global IMPORT_CSV
     run_dt = datetime.now(LOCAL_TZ)
     log_path = LOGS_DIR / f"{run_dt.strftime('%Y%m%d-%H%M')}_extraction.log"
@@ -861,16 +863,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
     if not dry_run:
         IMPORT_CSV = OUTPUT_DIR / f"import_{run_dt.strftime('%Y%m%d')}.csv"
 
-    if force_headers is None:
-        write_import_headers = not has_prior_imports()
-        headers_reason = (
-            "auto (aucun import existant)"
-            if write_import_headers
-            else "auto (imports existants détectés)"
-        )
-    else:
-        write_import_headers = force_headers
-        headers_reason = "forcé via --with-headers" if force_headers else "forcé via --no-headers"
+    write_import_headers, headers_reason = resolve_write_headers(force_headers)
 
     def log(msg: str, level: str = "INFO"):
         prefix = {"INFO": "  ", "WARN": "⚠ ", "ERR ": "✗ ", "IGN ": "— "}
@@ -1087,8 +1080,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
     if stats["erreurs"] or stats["fichiers_partiel"]:
         print(f"\n  ⚠  Détails dans : {log_path.name}")
     if not dry_run and IMPORT_CSV and stats["offres_ecrites"] > 0:
-        print(f"\n  → À importer dans Google Sheets : {IMPORT_CSV.name}")
-        print("     Données → Importer → Ajouter aux données actuelles")
+        print(f"\n  → Fichier prêt pour sheets_sync.py : {IMPORT_CSV.name}")
     print(f"{'='*55}\n")
 
     if not dry_run:
