@@ -149,6 +149,35 @@ Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'un
 
 ---
 
+### `login_pipeline_check.py`
+
+Couche de confort optionnelle au-dessus de `run_pipeline.py` : propose de lancer le pipeline une fois par jour calendaire (pas une fenêtre stricte de 24h), pensée pour être déclenchée automatiquement au login graphique plutôt que lancée à la main.
+
+Deux étapes, le même script pour les deux :
+
+```bash
+python3 login_pipeline_check.py           # lancé par l'autostart, sans terminal attaché
+python3 login_pipeline_check.py --prompt  # lancé par l'étape ci-dessus, dans un terminal
+```
+
+Sans `--prompt`, il vérifie `logs/last_pipeline_check.json` (un marqueur dédié, pas le ledger de fetch - une journée sans nouvel email ne met jamais à jour `fetched_at` du ledger, ce qui casserait un test "une fois par jour") et ne fait rien si la vérification du jour a déjà eu lieu. Sinon, il se relance lui-même dans un terminal via `x-terminal-emulator` (l'alternative générique Debian) avec `--prompt`, qui demande directement à l'utilisateur et lance `run_pipeline.py` (via le `.venv` du projet) en cas de confirmation. Le marqueur est mis à jour quelle que soit la réponse, donc il ne redemandera pas avant le prochain jour calendaire.
+
+**Configuration locale one-time** (non gérée par ce dépôt) : créer une entrée XDG autostart pour qu'un login graphique déclenche la vérification.
+
+```
+# ~/.config/autostart/jobflow-pipeline-check.desktop
+[Desktop Entry]
+Type=Application
+Name=JobFlow pipeline check
+Comment=Propose de lancer le pipeline JobFlow (une fois par jour maximum)
+Exec=/usr/bin/python3 /chemin/vers/JobFlow/login_pipeline_check.py
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
+Hidden=false
+```
+
+---
+
 ### `inspect_sheet_formatting.py`
 
 Outil de diagnostic ponctuel construit pendant le spike de faisabilité de `sheets_sync.py`, ne fait pas partie du pipeline habituel. Affiche les formules de cellules, les règles de validation des données et la mise en forme conditionnelle d'une feuille, lues directement via l'API Sheets, pour inspecter précisément ce qui doit être reproduit.
