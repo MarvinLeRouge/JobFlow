@@ -172,7 +172,24 @@ Marque les emails nouvellement traités par ce run comme lus, leur applique le l
 
 Nécessite son propre token OAuth2, `token_gmail_modify.json` (non versionné), avec le scope plus large `gmail.modify` (le reste du pipeline n'avait jamais eu besoin que de `gmail.readonly`). Le premier run réel ouvre un navigateur pour un écran de consentement unique.
 
-Volontairement restreint dans ses actions, vu tout ce que `gmail.modify` autorise techniquement : le seul appel à l'API Gmail que fait ce module est `messages.modify` avec un corps figé (`addLabelIds`/`removeLabelIds`, rien de contrôlable par l'appelant hormis l'ID du label lui-même) - jamais `trash`, `delete`, `batchDelete`, ni `send`. Un plafond de sécurité (`MAX_MESSAGES_PER_RUN`, 200) refuse de continuer si la liste de messages est invraisemblablement grande pour le delta d'une journée, ce qui protège contre un bug d'appelant plutôt qu'un vrai lot légitime. Supprimer les anciens emails déjà labellisés est hors périmètre de ce module - voir la [Roadmap](#roadmap) pour le script de nettoyage séparé et manuel prévu.
+Volontairement restreint dans ses actions, vu tout ce que `gmail.modify` autorise techniquement : le seul appel à l'API Gmail que fait ce module est `messages.modify` avec un corps figé (`addLabelIds`/`removeLabelIds`, rien de contrôlable par l'appelant hormis l'ID du label lui-même) - jamais `trash`, `delete`, `batchDelete`, ni `send`. Un plafond de sécurité (`MAX_MESSAGES_PER_RUN`, 200) refuse de continuer si la liste de messages est invraisemblablement grande pour le delta d'une journée, ce qui protège contre un bug d'appelant plutôt qu'un vrai lot légitime. Supprimer les anciens emails déjà labellisés est hors périmètre de ce module - voir `gmail_cleanup.py` ci-dessous.
+
+---
+
+### `gmail_cleanup.py`
+
+Déclenché manuellement uniquement - jamais appelé par `run_pipeline.py` ni `login_pipeline_check.py`. Met à la corbeille les emails déjà labellisés (`Recherche emploi`), mais seulement ceux que le ledger local confirme avoir été réellement traités par ce pipeline.
+
+```bash
+python3 gmail_cleanup.py --dry-run
+python3 gmail_cleanup.py
+```
+
+Le label Gmail seul n'est jamais un signal de suppression fiable : le script trouve les candidats en cherchant le label, puis croise cette liste avec les `gmail_id` connus du ledger avant de supprimer quoi que ce soit, car ce label existait déjà avant ce pipeline et sert aussi à classer de vraies candidatures à la main. Les entrées `statut_extraction == "ERREUR"` sont volontairement exclues de l'ensemble "traité connu" - l'extraction a réellement échoué pour elles, donc elles restent labellisées et visibles jusqu'à résolution manuelle plutôt que d'être nettoyées automatiquement.
+
+Utilise `messages.trash` (récupérable 30 jours), jamais de suppression définitive. Naturellement idempotent : Gmail exclut les emails déjà à la corbeille des résultats de recherche par label, donc un second passage ne trouve plus rien à faire, aucun état séparé à suivre.
+
+Remarque : le compteur de label dans l'interface Gmail affiche le nombre de conversations (threads), pas le nombre de messages individuels - le script, lui, rapporte toujours des comptes de messages, donc les deux chiffres peuvent légitimement différer si un candidat partage un fil avec d'autres messages.
 
 ---
 
@@ -362,7 +379,7 @@ pre-commit install   # une seule fois, pour activer le hook git
 
 **L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
 
-**Nettoyer les emails Gmail déjà traités** : `gmail_labeling.py` (voir ci-dessus) marque les emails de chaque run comme lus, labellisés et archivés, mais ne supprime jamais rien. Un script séparé et déclenché manuellement est prévu pour mettre à la corbeille les emails déjà labellisés, en recoupant avec le ledger local plutôt qu'en se fiant seulement au label Gmail (le label peut aussi être appliqué à la main sur des emails sans rapport). Pas encore construit.
+**Nettoyer les emails Gmail déjà traités** a été mis en œuvre dans `gmail_cleanup.py` (voir ci-dessus) : un script déclenché manuellement qui met à la corbeille les emails déjà labellisés, en recoupant avec le ledger local plutôt qu'en se fiant seulement au label Gmail.
 
 ---
 
