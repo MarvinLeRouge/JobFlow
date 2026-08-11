@@ -172,7 +172,24 @@ Marks this run's newly-processed emails as read, applies the `Recherche emploi` 
 
 Requires its own OAuth2 token, `token_gmail_modify.json` (git-ignored), with the broader `gmail.modify` scope (the rest of the pipeline only ever needed `gmail.readonly`). The first real run opens a browser for a one-time consent screen.
 
-Deliberately restricted in scope, given how much `gmail.modify` technically allows: the only Gmail API call this module makes is `messages.modify` with a hardcoded body (`addLabelIds`/`removeLabelIds`, nothing caller-controlled beyond the label ID itself) - never `trash`, `delete`, `batchDelete`, or `send`. A safety cap (`MAX_MESSAGES_PER_RUN`, 200) refuses to proceed if the message list is implausibly large for one day's delta, guarding against a caller bug rather than a legitimate batch. Deleting old, already-labeled emails is out of scope for this module entirely - see the [Roadmap](#roadmap) for the planned separate, manually-triggered cleanup script.
+Deliberately restricted in scope, given how much `gmail.modify` technically allows: the only Gmail API call this module makes is `messages.modify` with a hardcoded body (`addLabelIds`/`removeLabelIds`, nothing caller-controlled beyond the label ID itself) - never `trash`, `delete`, `batchDelete`, or `send`. A safety cap (`MAX_MESSAGES_PER_RUN`, 200) refuses to proceed if the message list is implausibly large for one day's delta, guarding against a caller bug rather than a legitimate batch. Deleting old, already-labeled emails is out of scope for this module entirely - see `gmail_cleanup.py` below.
+
+---
+
+### `gmail_cleanup.py`
+
+Manually-triggered only - never called by `run_pipeline.py` or `login_pipeline_check.py`. Moves already-labeled (`Recherche emploi`) emails to Gmail's Trash, but only the ones the local ledger confirms this pipeline actually processed.
+
+```bash
+python3 gmail_cleanup.py --dry-run
+python3 gmail_cleanup.py
+```
+
+The Gmail label alone is never trusted as a deletion signal: it finds candidates by searching the label, then intersects that list with the ledger's known-processed `gmail_id` values before trashing anything, since the label may also be applied by hand to unrelated emails (the label existed before this pipeline did, used for filing real job applications). Entries with `statut_extraction == "ERREUR"` are excluded from the known-processed set on purpose - extraction genuinely failed for them, so they stay labeled and visible until resolved by hand rather than being auto-cleaned.
+
+Uses `messages.trash` (recoverable for 30 days), never permanent deletion. Naturally idempotent: Gmail excludes already-trashed messages from label search results, so a second run finds nothing left to do, no separate state tracking needed.
+
+Note: Gmail's UI label counter shows conversation (thread) count, not individual message count - the script itself always reports message counts, so the two numbers may legitimately differ if any candidate shares a thread with other messages.
 
 ---
 
@@ -362,7 +379,7 @@ pre-commit install   # once, to enable the git hook
 
 **Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
 
-**Cleaning up already-processed Gmail emails**: `gmail_labeling.py` (see above) marks each run's processed emails read, labeled, and archived, but never deletes anything. A separate, manually-triggered script is planned to move already-labeled emails to Trash, cross-checked against the local ledger rather than trusting the Gmail label alone (the label may also be applied by hand to unrelated emails). Not yet built.
+**Cleaning up already-processed Gmail emails** was implemented in `gmail_cleanup.py` (see above): a manually-triggered script that moves already-labeled emails to Trash, cross-checked against the local ledger rather than trusting the Gmail label alone.
 
 ---
 
