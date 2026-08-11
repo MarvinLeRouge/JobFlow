@@ -150,17 +150,29 @@ Files written: nothing durable locally besides `logs/sheets_sync_error.json` on 
 
 ### `run_pipeline.py`
 
-Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` in sequence.
+Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` → `gmail_labeling` in sequence.
 
 ```bash
 python3 run_pipeline.py                  # full pipeline
-python3 run_pipeline.py --dry-run        # simulate all four steps
+python3 run_pipeline.py --dry-run        # simulate all five steps
 python3 run_pipeline.py --since-days 30  # first run after migration
 ```
 
 `--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run after the [migration](#migration-one-time-after-upgrading), because migrated ledger entries do not count as fetch history: without it, the run stops on "impossible de déterminer un point de départ".
 
 Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure. It also stops before step 1 if `sheets_sync.py` has an unacknowledged error left over from a previous run (see the error gate above).
+
+The `gmail_labeling` step's scope is captured *before* `extract_eml` runs (the ledger's `PENDING` entries at that point), not recomputed afterward, so it only ever acts on this run's own delta, never a retroactive scan of the whole ledger.
+
+---
+
+### `gmail_labeling.py`
+
+Marks this run's newly-processed emails as read, applies the `Recherche emploi` Gmail label, and archives them (removes the `INBOX` label) - purely a housekeeping step, no deletion. Called automatically as `run_pipeline.py`'s last step; not meant to be run standalone.
+
+Requires its own OAuth2 token, `token_gmail_modify.json` (git-ignored), with the broader `gmail.modify` scope (the rest of the pipeline only ever needed `gmail.readonly`). The first real run opens a browser for a one-time consent screen.
+
+Deliberately restricted in scope, given how much `gmail.modify` technically allows: the only Gmail API call this module makes is `messages.modify` with a hardcoded body (`addLabelIds`/`removeLabelIds`, nothing caller-controlled beyond the label ID itself) - never `trash`, `delete`, `batchDelete`, or `send`. A safety cap (`MAX_MESSAGES_PER_RUN`, 200) refuses to proceed if the message list is implausibly large for one day's delta, guarding against a caller bug rather than a legitimate batch. Deleting old, already-labeled emails is out of scope for this module entirely - see the [Roadmap](#roadmap) for the planned separate, manually-triggered cleanup script.
 
 ---
 
@@ -349,6 +361,8 @@ pre-commit install   # once, to enable the git hook
 ## Roadmap
 
 **Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
+
+**Cleaning up already-processed Gmail emails**: `gmail_labeling.py` (see above) marks each run's processed emails read, labeled, and archived, but never deletes anything. A separate, manually-triggered script is planned to move already-labeled emails to Trash, cross-checked against the local ledger rather than trusting the Gmail label alone (the label may also be applied by hand to unrelated emails). Not yet built.
 
 ---
 
