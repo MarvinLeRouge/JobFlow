@@ -5,6 +5,7 @@ import run_pipeline
 
 def test_run_pipeline_calls_steps_in_order(monkeypatch):
     calls = []
+    monkeypatch.setattr(run_pipeline, "load_ledger", lambda _path: {})
     monkeypatch.setattr(
         run_pipeline.fetch_gmail,
         "run",
@@ -22,6 +23,11 @@ def test_run_pipeline_calls_steps_in_order(monkeypatch):
     monkeypatch.setattr(
         run_pipeline.sheets_sync, "run", lambda dry_run: calls.append(("sheets_sync", dry_run))
     )
+    monkeypatch.setattr(
+        run_pipeline.gmail_labeling,
+        "run",
+        lambda message_ids, dry_run: calls.append(("gmail_labeling", dry_run)),
+    )
 
     run_pipeline.run_pipeline(dry_run=True)
 
@@ -30,11 +36,13 @@ def test_run_pipeline_calls_steps_in_order(monkeypatch):
         ("rename", True, False),
         ("extract", True),
         ("sheets_sync", True),
+        ("gmail_labeling", True),
     ]
 
 
 def test_run_pipeline_passes_since_days_to_fetch(monkeypatch):
     calls = []
+    monkeypatch.setattr(run_pipeline, "load_ledger", lambda _path: {})
     monkeypatch.setattr(
         run_pipeline.fetch_gmail,
         "run",
@@ -44,6 +52,7 @@ def test_run_pipeline_passes_since_days_to_fetch(monkeypatch):
     monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
     monkeypatch.setattr(run_pipeline.sheets_sync, "check_error_gate", lambda: None)
     monkeypatch.setattr(run_pipeline.sheets_sync, "run", lambda dry_run: None)
+    monkeypatch.setattr(run_pipeline.gmail_labeling, "run", lambda message_ids, dry_run: None)
 
     run_pipeline.run_pipeline(dry_run=True, since_days=30)
 
@@ -52,6 +61,7 @@ def test_run_pipeline_passes_since_days_to_fetch(monkeypatch):
 
 def test_run_pipeline_defaults_since_days_to_none(monkeypatch):
     calls = []
+    monkeypatch.setattr(run_pipeline, "load_ledger", lambda _path: {})
     monkeypatch.setattr(
         run_pipeline.fetch_gmail,
         "run",
@@ -61,6 +71,7 @@ def test_run_pipeline_defaults_since_days_to_none(monkeypatch):
     monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
     monkeypatch.setattr(run_pipeline.sheets_sync, "check_error_gate", lambda: None)
     monkeypatch.setattr(run_pipeline.sheets_sync, "run", lambda dry_run: None)
+    monkeypatch.setattr(run_pipeline.gmail_labeling, "run", lambda message_ids, dry_run: None)
 
     run_pipeline.run_pipeline(dry_run=True)
 
@@ -85,8 +96,9 @@ def test_run_pipeline_stops_on_fetch_failure(monkeypatch):
     assert calls == []
 
 
-def test_run_pipeline_calls_sheets_sync_last(monkeypatch):
+def test_run_pipeline_calls_sheets_sync_before_gmail_labeling(monkeypatch):
     calls = []
+    monkeypatch.setattr(run_pipeline, "load_ledger", lambda _path: {})
     monkeypatch.setattr(
         run_pipeline.fetch_gmail,
         "run",
@@ -104,6 +116,11 @@ def test_run_pipeline_calls_sheets_sync_last(monkeypatch):
     monkeypatch.setattr(
         run_pipeline.sheets_sync, "run", lambda dry_run: calls.append(("sheets_sync", dry_run))
     )
+    monkeypatch.setattr(
+        run_pipeline.gmail_labeling,
+        "run",
+        lambda message_ids, dry_run: calls.append(("gmail_labeling", dry_run)),
+    )
 
     run_pipeline.run_pipeline(dry_run=True)
 
@@ -112,7 +129,36 @@ def test_run_pipeline_calls_sheets_sync_last(monkeypatch):
         ("rename", True, False),
         ("extract", True),
         ("sheets_sync", True),
+        ("gmail_labeling", True),
     ]
+
+
+def test_run_pipeline_marks_gmail_processed_last_with_the_pre_extract_pending_snapshot(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        run_pipeline,
+        "load_ledger",
+        lambda _path: {
+            "<msg-pending>": {"statut_extraction": "PENDING"},
+            "<msg-done>": {"statut_extraction": "OK"},
+        },
+    )
+    monkeypatch.setattr(run_pipeline.fetch_gmail, "run", lambda dry_run, since_days=None: None)
+    monkeypatch.setattr(run_pipeline.rename_eml, "run", lambda dry_run, purge: None)
+    monkeypatch.setattr(run_pipeline.extract_eml, "main", lambda dry_run: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "check_error_gate", lambda: None)
+    monkeypatch.setattr(run_pipeline.sheets_sync, "run", lambda dry_run: None)
+    monkeypatch.setattr(
+        run_pipeline.gmail_labeling,
+        "run",
+        lambda message_ids, dry_run: calls.append((message_ids, dry_run)),
+    )
+
+    run_pipeline.run_pipeline(dry_run=True)
+
+    assert calls == [(["<msg-pending>"], True)]
 
 
 def test_run_pipeline_checks_error_gate_before_anything_else(monkeypatch):

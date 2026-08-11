@@ -150,17 +150,29 @@ Fichiers écrits : rien de durable en local à part `logs/sheets_sync_error.json
 
 ### `run_pipeline.py`
 
-Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync`.
+Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` → `gmail_labeling`.
 
 ```bash
 python3 run_pipeline.py                  # pipeline complet
-python3 run_pipeline.py --dry-run        # simuler les quatre étapes
+python3 run_pipeline.py --dry-run        # simuler les cinq étapes
 python3 run_pipeline.py --since-days 30  # premier run après migration
 ```
 
 `--since-days` est transmis à `fetch_gmail.py`. Il est nécessaire pour le tout premier run après la [migration](#migration-une-seule-fois-après-mise-à-jour), car les entrées de ledger migrées ne comptent pas comme historique de fetch : sans lui, le run s'arrête sur "impossible de déterminer un point de départ".
 
 Fail-fast : le pipeline s'arrête à la première étape qui échoue, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par une étape précédente. Il s'arrête aussi avant l'étape 1 si `sheets_sync.py` porte une erreur non acquittée d'un run précédent (voir le verrou d'erreur ci-dessus).
+
+Le périmètre de l'étape `gmail_labeling` est capturé *avant* que `extract_eml` ne s'exécute (les entrées `PENDING` du ledger à ce moment-là), pas recalculé après coup - donc elle n'agit jamais que sur le delta de ce run, jamais un balayage rétroactif de tout le ledger.
+
+---
+
+### `gmail_labeling.py`
+
+Marque les emails nouvellement traités par ce run comme lus, leur applique le label Gmail `Recherche emploi`, et les archive (retire le label `INBOX`) - une simple tâche de rangement, aucune suppression. Appelé automatiquement en dernière étape de `run_pipeline.py` ; pas prévu pour être lancé seul.
+
+Nécessite son propre token OAuth2, `token_gmail_modify.json` (non versionné), avec le scope plus large `gmail.modify` (le reste du pipeline n'avait jamais eu besoin que de `gmail.readonly`). Le premier run réel ouvre un navigateur pour un écran de consentement unique.
+
+Volontairement restreint dans ses actions, vu tout ce que `gmail.modify` autorise techniquement : le seul appel à l'API Gmail que fait ce module est `messages.modify` avec un corps figé (`addLabelIds`/`removeLabelIds`, rien de contrôlable par l'appelant hormis l'ID du label lui-même) - jamais `trash`, `delete`, `batchDelete`, ni `send`. Un plafond de sécurité (`MAX_MESSAGES_PER_RUN`, 200) refuse de continuer si la liste de messages est invraisemblablement grande pour le delta d'une journée, ce qui protège contre un bug d'appelant plutôt qu'un vrai lot légitime. Supprimer les anciens emails déjà labellisés est hors périmètre de ce module - voir la [Roadmap](#roadmap) pour le script de nettoyage séparé et manuel prévu.
 
 ---
 
@@ -349,6 +361,8 @@ pre-commit install   # une seule fois, pour activer le hook git
 ## Roadmap
 
 **L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
+
+**Nettoyer les emails Gmail déjà traités** : `gmail_labeling.py` (voir ci-dessus) marque les emails de chaque run comme lus, labellisés et archivés, mais ne supprime jamais rien. Un script séparé et déclenché manuellement est prévu pour mettre à la corbeille les emails déjà labellisés, en recoupant avec le ledger local plutôt qu'en se fiant seulement au label Gmail (le label peut aussi être appliqué à la main sur des emails sans rapport). Pas encore construit.
 
 ---
 
