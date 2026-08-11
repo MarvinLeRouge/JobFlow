@@ -10,7 +10,7 @@ __pycache__/
 .ruff_cache/
 token.json
 credentials.json
-token_sheets.json
+token_*.json
 client_secret*.json
 config/config.local.json
 
