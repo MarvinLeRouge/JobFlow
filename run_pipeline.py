@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml -> sheets_sync.
+"""Runs the full pipeline: fetch_gmail -> rename_eml -> extract_eml ->
+sheets_sync -> gmail_labeling.
 
 Usage:
     python3 run_pipeline.py [--dry-run] [--since-days N]
@@ -13,27 +14,42 @@ against a state left inconsistent by an earlier failure.
 """
 
 import argparse
+from pathlib import Path
 
 import extract_eml
 import fetch_gmail
+import gmail_labeling
 import rename_eml
 import sheets_sync
+from ledger import load_ledger
+
+LEDGER_FILE = Path(__file__).parent / "logs" / "email_ledger.json"
 
 
 def run_pipeline(dry_run: bool, since_days: int | None = None) -> None:
     sheets_sync.check_error_gate()
 
-    print("=== 1/4 - Fetch Gmail ===")
+    print("=== 1/5 - Fetch Gmail ===")
     fetch_gmail.run(dry_run=dry_run, since_days=since_days)
 
-    print("\n=== 2/4 - Rename & index ===")
+    print("\n=== 2/5 - Rename & index ===")
     rename_eml.run(dry_run=dry_run, purge=False)
 
-    print("\n=== 3/4 - Extract offers ===")
+    ledger = load_ledger(LEDGER_FILE)
+    pending_before = [
+        mid
+        for mid, entry in ledger.items()
+        if entry.get("statut_extraction", "PENDING") == "PENDING"
+    ]
+
+    print("\n=== 3/5 - Extract offers ===")
     extract_eml.main(dry_run=dry_run)
 
-    print("\n=== 4/4 - Sync to Google Sheets ===")
+    print("\n=== 4/5 - Sync to Google Sheets ===")
     sheets_sync.run(dry_run=dry_run)
+
+    print("\n=== 5/5 - Mark processed emails in Gmail ===")
+    gmail_labeling.run(pending_before, dry_run=dry_run)
 
 
 if __name__ == "__main__":
