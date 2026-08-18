@@ -174,6 +174,21 @@ Requires its own OAuth2 token, `token_gmail_modify.json` (git-ignored), with the
 
 Deliberately restricted in scope, given how much `gmail.modify` technically allows: the only Gmail API call this module makes is `messages.modify` with a hardcoded body (`addLabelIds`/`removeLabelIds`, nothing caller-controlled beyond the label ID itself) - never `trash`, `delete`, `batchDelete`, or `send`. A safety cap (`MAX_MESSAGES_PER_RUN`, 200) refuses to proceed if the message list is implausibly large for one day's delta, guarding against a caller bug rather than a legitimate batch. Deleting old, already-labeled emails is out of scope for this module entirely - see `gmail_cleanup.py` below.
 
+**Recovering from a pipeline crash that happens after `extract_eml` succeeded** (e.g. `sheets_sync` or `gmail_labeling` failing on an expired OAuth token, see [Gmail OAuth2 setup](#gmail-oauth2-setup)): this step's delta is a snapshot of the ledger's `PENDING` entries taken right before `extract_eml` runs, recomputed fresh on every `run_pipeline.py` invocation. If `extract_eml` already flipped those entries to `OK`/`PARTIEL` before the crash, simply rerunning `run_pipeline.py` will not pick them back up for `gmail_labeling` - they are no longer `PENDING`. Catch them up manually instead:
+
+```bash
+python3 -c "
+import json
+from datetime import date
+with open('logs/email_ledger.json') as f:
+    ledger = json.load(f)
+today = date.today().isoformat()
+ids = [mid for mid, e in ledger.items() if e.get('fetched_at','').startswith(today) and e.get('statut_extraction') not in (None, 'PENDING')]
+import gmail_labeling
+gmail_labeling.run(ids, dry_run=True)  # drop dry_run once the count looks right
+"
+```
+
 ---
 
 ### `gmail_cleanup.py`

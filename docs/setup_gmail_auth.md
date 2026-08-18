@@ -10,7 +10,7 @@ Walkthrough for setting up Gmail API access for `fetch_gmail.py`, written as eac
 
 ## 2. OAuth consent screen and credentials
 
-1. **APIs & Services -> OAuth consent screen**: choose **External** (the only option available for a plain personal Gmail account). Testing mode is enough, no need to publish the app; add your own address as a test user if prompted.
+1. **APIs & Services -> OAuth consent screen**: choose **External** (the only option available for a plain personal Gmail account). Testing mode works for personal use, but see the caveat below before relying on it long-term; add your own address as a test user if prompted.
 2. **APIs & Services -> Credentials -> + CREATE CREDENTIALS -> OAuth client ID**.
 3. Application type: **Desktop app**.
 4. Download the resulting JSON, save it as `credentials.json` at the project root (same directory as `auth.py`).
@@ -44,3 +44,7 @@ print(profile['emailAddress'])
 Expected: prints the monitored Gmail address.
 
 Verify silent refresh (no browser should open): edit `token.json`'s `expiry` field to a past date, then re-run the command above. `get_credentials()` refreshes the token using the stored `refresh_token` and updates `expiry` in place - confirmed by checking `token.json`'s `expiry` moved forward after the re-run.
+
+**Testing-mode caveat: refresh tokens expire after 7 days, regardless of use.** Confirmed live on 2026-08-18: `token_sheets.json` and `token_gmail_modify.json`, both issued on 2026-08-11, failed to refresh exactly 7 days later with `google.auth.exceptions.RefreshError: invalid_grant: Token has been expired or revoked` - Google's documented behavior for any OAuth app still in Testing publishing status, unrelated to how often the token was actually refreshed in between. `token.json` (Gmail read-only) happened to survive only because it had been re-issued more recently.
+
+`auth.get_credentials()` now catches this and reruns the interactive consent flow instead of crashing, so a dead refresh token just means one more browser prompt rather than a hard failure - but it will keep recurring roughly every 7 days for any token that was last issued (or re-issued) more than a week ago. The permanent fix is **APIs & Services -> OAuth consent screen -> Publishing status -> PUBLISH APP**, which removes the 7-day cap entirely; for a personal app using sensitive (non-restricted) scopes like `gmail.modify` and `spreadsheets`, this does not require Google's verification review, though the consent screen may show an "unverified app" warning that is safe to click through for your own app.
