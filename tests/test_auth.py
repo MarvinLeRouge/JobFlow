@@ -1,6 +1,8 @@
 # tests/test_auth.py
 from unittest.mock import MagicMock, patch
 
+from google.auth.exceptions import RefreshError
+
 import auth
 
 
@@ -27,6 +29,31 @@ def test_get_credentials_refreshes_expired_token(tmp_path, monkeypatch):
     fake_creds.refresh.assert_called_once()
     assert result is fake_creds
     assert (tmp_path / "token.json").read_text(encoding="utf-8") == '{"refreshed": true}'
+
+
+def test_get_credentials_reauthenticates_when_refresh_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(auth, "TOKEN_FILE", tmp_path / "token.json")
+    monkeypatch.setattr(auth, "CREDENTIALS_FILE", tmp_path / "credentials.json")
+    (tmp_path / "token.json").write_text("{}", encoding="utf-8")
+
+    stale_creds = MagicMock(valid=False, expired=True, refresh_token="r")
+    stale_creds.refresh.side_effect = RefreshError("invalid_grant: Token expired or revoked.")
+
+    fresh_creds = MagicMock()
+    fresh_creds.to_json.return_value = '{"reauthenticated": true}'
+    fake_flow = MagicMock()
+    fake_flow.run_local_server.return_value = fresh_creds
+
+    with (
+        patch.object(auth.Credentials, "from_authorized_user_file", return_value=stale_creds),
+        patch.object(auth.InstalledAppFlow, "from_client_secrets_file", return_value=fake_flow),
+    ):
+        result = auth.get_credentials()
+
+    stale_creds.refresh.assert_called_once()
+    fake_flow.run_local_server.assert_called_once_with(port=0)
+    assert result is fresh_creds
+    assert (tmp_path / "token.json").read_text(encoding="utf-8") == '{"reauthenticated": true}'
 
 
 def test_get_credentials_runs_flow_when_no_token_file(tmp_path, monkeypatch):
