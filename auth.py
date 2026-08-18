@@ -5,6 +5,7 @@ token.json and credentials.json are never committed (see .gitignore).
 
 from pathlib import Path
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -36,9 +37,18 @@ def get_credentials(scopes: list[str] | None = None, token_file: Path | None = N
     if creds and creds.valid:
         return creds
 
+    refreshed = False
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    else:
+        try:
+            creds.refresh(Request())
+            refreshed = True
+        except RefreshError:
+            # Refresh token expired/revoked server-side (e.g. Google's 7-day
+            # cap for an OAuth app still in "Testing" publishing status) -
+            # fall through to a fresh interactive consent instead of crashing.
+            creds = None
+
+    if not refreshed:
         flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), scopes)
         creds = flow.run_local_server(port=0)
 
