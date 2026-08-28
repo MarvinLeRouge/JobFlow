@@ -14,5 +14,10 @@ token_*.json
 client_secret*.json
 config/config.local.json
 
+# Tooling output
+.serena
+graphify-out
+.husky
+
 docs/ai/
 backups/
