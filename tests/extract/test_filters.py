@@ -1,4 +1,4 @@
-from extract.filters import build_cle_dedup, extract_stack, is_blacklisted
+from extract.filters import blacklist_category, build_cle_dedup, extract_stack, is_blacklisted
 
 
 def test_build_cle_dedup_normalizes_case_accents_and_separators():
@@ -46,3 +46,13 @@ def test_extract_stack_respects_word_boundaries():
 def test_extract_stack_returns_empty_string_when_nothing_found():
     keywords = {"Java": ["java"]}
     assert extract_stack("Poste en vente pure", keywords) == ""
+
+
+def test_blacklist_category_maps_term_to_its_configured_category():
+    categories = {"commercial immobilier": "immobilier", "nounou": "aide à domicile"}
+    assert blacklist_category("commercial immobilier", categories) == "immobilier"
+
+
+def test_blacklist_category_falls_back_to_the_term_itself_when_unmapped():
+    categories = {"commercial immobilier": "immobilier"}
+    assert blacklist_category("babysitter", categories) == "babysitter"
