@@ -148,6 +148,23 @@ Fichiers écrits : rien de durable en local à part `logs/sheets_sync_error.json
 
 ---
 
+### `sheets_sync_recovery.py`
+
+Déclenchement manuel uniquement - jamais appelé par `run_pipeline.py`. Comme `sheets_sync.py` ne regarde que le CSV d'import du **jour même** (voir ci-dessus), un échec non acquitté un jour donné suivi d'un run normal un jour plus tard laisse silencieusement les lignes de ce jour-là orphelines pour toujours : elles ne sont jamais resynchronisées, et le suivi du "plus haut ID" de la feuille les a déjà dépassées, donc rien en aval ne remarque le trou de lui-même. Ce script détecte et répare exactement ce cas.
+
+```bash
+python3 sheets_sync_recovery.py --dry-run   # rapport seul, aucune écriture
+python3 sheets_sync_recovery.py             # rattrape ce qui est trouvé
+```
+
+Compare chaque ID d'offre de la colonne A de la feuille avec `output/offres.csv` (l'archive locale cumulative, censée être parfaitement continue en ID depuis `E000001`) pour trouver tout ID manquant dans la feuille - trou interne ou queue en retard, même détection dans les deux cas. Chaque séquence continue manquante est ajoutée à la fin actuelle de la feuille, précédée d'une ligne vide en séparateur pour qu'un lot rattrapé reste visuellement distinguable d'une synchro normale du jour. La colonne A se retrouve brièvement hors ordre numérique strict après un rattrapage (purement cosmétique - rien en aval ne dépend de l'ordre ; à réordonner à la main si souhaité).
+
+Si `output/offres.csv` elle-même a un trou, c'est une anomalie différente et plus grave - le script refuse de deviner et lève une exception plutôt que d'essayer de la corriger.
+
+Sûr à relancer après une interruption (par ex. en cas de dépassement du quota d'écriture par minute de l'API Sheets en plein rattrapage d'un gros volume) : il relit l'état réel de la feuille au début de chaque run, donc les séquences déjà écrites cessent simplement d'apparaître comme manquantes.
+
+---
+
 ### `run_pipeline.py`
 
 Point d'entrée recommandé. Enchaîne `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` → `gmail_labeling`.
@@ -415,7 +432,7 @@ Projet personnel à double objectif :
 | Fetch email | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sync feuille | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Géocodage fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
-| Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 148 tests |
+| Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 183 tests |
 | Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
 | Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
