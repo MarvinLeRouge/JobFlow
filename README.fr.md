@@ -158,7 +158,7 @@ Nécessite son propre token OAuth2, `token_gmail_modify.json` (non versionné), 
 
 Volontairement restreint dans ses actions, vu tout ce que `gmail.modify` autorise techniquement : le seul appel à l'API Gmail que fait ce module est `messages.modify` avec un corps figé (`addLabelIds`/`removeLabelIds`, rien de contrôlable par l'appelant hormis l'ID du label lui-même) - jamais `trash`, `delete`, `batchDelete`, ni `send`. Un plafond de sécurité (`MAX_MESSAGES_PER_RUN`, 200) refuse de continuer si la liste de messages est invraisemblablement grande pour le delta d'une journée, ce qui protège contre un bug d'appelant plutôt qu'un vrai lot légitime. Supprimer les anciens emails déjà labellisés est hors périmètre de ce module - voir `gmail_cleanup.py` ci-dessous.
 
-**Se remettre d'un plantage du pipeline survenu après le succès d'`extract_eml`** (ex : `sheets_sync` ou `gmail_labeling` qui échoue sur un token OAuth expiré, voir [Configuration OAuth2 Gmail](#configuration-oauth2-gmail)) : le delta de cette étape est un instantané des entrées `PENDING` du ledger pris juste avant l'exécution d'`extract_eml`, recalculé à chaque appel de `run_pipeline.py`. Si `extract_eml` a déjà fait passer ces entrées à `OK`/`PARTIEL` avant le plantage, un simple relancement de `run_pipeline.py` ne les reprendra pas pour `gmail_labeling` - elles ne sont plus `PENDING`. Il faut les rattraper manuellement :
+**Se remettre d'un plantage du pipeline survenu après le succès d'`extract_eml`** (ex : `sheets_sync` ou `gmail_labeling` qui échoue sur un token OAuth expiré, voir [Configuration OAuth2](docs/operations.fr.md#configuration-oauth2)) : le delta de cette étape est un instantané des entrées `PENDING` du ledger pris juste avant l'exécution d'`extract_eml`, recalculé à chaque appel de `run_pipeline.py`. Si `extract_eml` a déjà fait passer ces entrées à `OK`/`PARTIEL` avant le plantage, un simple relancement de `run_pipeline.py` ne les reprendra pas pour `gmail_labeling` - elles ne sont plus `PENDING`. Il faut les rattraper manuellement :
 
 ```bash
 python3 -c "
@@ -205,19 +205,7 @@ python3 login_pipeline_check.py --prompt  # lancé par l'étape ci-dessus, dans 
 
 Sans `--prompt`, il vérifie `logs/last_pipeline_check.json` (un marqueur dédié, pas le ledger de fetch - une journée sans nouvel email ne met jamais à jour `fetched_at` du ledger, ce qui casserait un test "une fois par jour") et ne fait rien si la vérification du jour a déjà eu lieu. Sinon, il se relance lui-même dans un terminal via `x-terminal-emulator` (l'alternative générique Debian) avec `--prompt`, qui demande directement à l'utilisateur et lance `run_pipeline.py` (via le `.venv` du projet) en cas de confirmation. Le marqueur est mis à jour quelle que soit la réponse, donc il ne redemandera pas avant le prochain jour calendaire.
 
-**Configuration locale one-time** (non gérée par ce dépôt) : créer une entrée XDG autostart pour qu'un login graphique déclenche la vérification.
-
-```
-# ~/.config/autostart/jobflow-pipeline-check.desktop
-[Desktop Entry]
-Type=Application
-Name=JobFlow pipeline check
-Comment=Propose de lancer le pipeline JobFlow (une fois par jour maximum)
-Exec=/usr/bin/python3 /chemin/vers/JobFlow/login_pipeline_check.py
-X-GNOME-Autostart-enabled=true
-NoDisplay=true
-Hidden=false
-```
+**Configuration locale one-time** (non gérée par ce dépôt) : voir [Autostart](docs/operations.fr.md#autostart-vérification-déclenchée-au-login) dans la doc d'exploitation.
 
 ---
 
@@ -233,15 +221,9 @@ python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
 
 ---
 
-## Configuration OAuth2 Gmail
+## Exploitation
 
-`fetch_gmail.py` nécessite un projet Google Cloud avec l'API Gmail activée et une autorisation OAuth2 réalisée une seule fois (`credentials.json` et `token.json`, tous deux exclus du dépôt). Voir `docs/setup_gmail_auth.md` pour le pas-à-pas complet, y compris le piège de l'erreur "Access blocked" en mode test et la vérification du rafraîchissement silencieux du token.
-
----
-
-## Configuration OAuth2 Google Sheets
-
-`sheets_sync.py` a besoin de son propre token OAuth2, `token_sheets.json` (exclu du dépôt), autorisé avec le scope `spreadsheets`. Il réutilise le même client OAuth que Gmail (`credentials.json`) mais garde un fichier de token séparé puisque les scopes diffèrent. Le premier run réel ouvre un navigateur pour l'écran de consentement une seule fois ; ensuite, `auth.get_credentials()` rafraîchit le token silencieusement, comme il le fait déjà pour Gmail.
+Configuration OAuth2 (Gmail, Sheets, étiquetage Gmail), autostart, et récupération après échec de synchronisation : voir [docs/operations.fr.md](docs/operations.fr.md).
 
 ---
 
