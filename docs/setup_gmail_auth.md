@@ -1,3 +1,7 @@
+[🇫🇷 Version française](setup_gmail_auth.fr.md) | 🇬🇧 English version
+
+---
+
 # Gmail API OAuth2 setup
 
 Walkthrough for setting up Gmail API access for `fetch_gmail.py`, written as each step was actually completed and verified.
