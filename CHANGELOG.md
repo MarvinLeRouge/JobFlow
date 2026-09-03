@@ -61,18 +61,8 @@ run `git-cliff -o CHANGELOG.md`.
 
 
 ### Documentation
-- Add gmail fetch integration design spec
-- Use explicit sentinel for pre-existing ledger entries
-- Add gmail fetch integration implementation plan
-- Fold sender_domain dedup into Task 8 (pre-flight finding)
-- Remove em dashes from new code in Task 10/11 plan text
 - Update README for the Gmail fetch pipeline, add French translation
 - Correct fetched_at description for migrated ledger entries
-- Add sheets sync design spec
-- Add sheets sync implementation plan
-- Write Tasks 6-7 from live spike findings
-- Correct Tasks 6-7 write ordering per confirmed business rules
-- Add Task 8bis for sheets_sync.py's missing CLI entry point
 - Document sheets_sync.py and the updated pipeline
 - Document Références tab fragility and two deferred minor findings
 - Add ARCHITECTURE, MIT license, update READMEs for the extract/ package split
