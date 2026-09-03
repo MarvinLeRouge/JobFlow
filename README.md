@@ -8,7 +8,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-148%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-185%20passing-brightgreen)
 ![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)
 
 ---
@@ -39,39 +39,6 @@ output/import_YYYYMMDD.csv  ← new offers from this run, still produced
 ```
 
 `run_pipeline.py` runs all four steps in sequence and is the recommended entry point.
-
----
-
-## Migration (one-time, after upgrading)
-
-Two one-shot scripts bring an existing installation up to date with the Gmail pipeline. They must be run **in this order**, and both must be run **before** `extract_eml.py` or `run_pipeline.py` is used for real: otherwise `Message_ID` is silently dropped from the exported rows.
-
-**1. Legacy index to ledger** (turns `logs/eml_index.csv` into `logs/email_ledger.json`):
-
-```bash
-python3 migrate_eml_index_to_ledger.py --dry-run   # review the entry count first
-python3 migrate_eml_index_to_ledger.py             # write logs/email_ledger.json
-```
-
-The old `logs/eml_index.csv` is left in place, remove it by hand once the ledger looks right.
-
-**2. Message_ID column** (adds the column to `output/offres.csv` and to `offres_csv_headers` in `config/config.json`):
-
-```bash
-cp output/offres.csv output/offres.csv.bak         # recommended, see the note below
-python3 migrate_offres_add_message_id.py --dry-run # review the row count first
-python3 migrate_offres_add_message_id.py           # write the column
-```
-
-Both files are written to a temp file and moved into place, so an interrupted run cannot truncate them, and `config/config.json` is edited in place rather than reserialized, so its formatting survives. Backing up `output/offres.csv` by hand is still recommended: `output/` is git-ignored, there is no history to fall back on.
-
-Once both migrations have run for real, `extract_eml.py` and `run_pipeline.py` can be used normally. The very first fetch after migration needs an explicit start date, since migrated entries carry no real fetch history:
-
-```bash
-python3 run_pipeline.py --since-days 30
-```
-
-**Sheets sync target:** `sheets_sync.py` itself needs no data migration, but the real spreadsheet ID must be set in `config/config.local.json` (git-ignored, see [Configuration](#configuration) below) before relying on `sheets_sync.py` or `run_pipeline.py` for actual use.
 
 ---
 
@@ -172,10 +139,10 @@ Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` �
 ```bash
 python3 run_pipeline.py                  # full pipeline
 python3 run_pipeline.py --dry-run        # simulate all five steps
-python3 run_pipeline.py --since-days 30  # first run after migration
+python3 run_pipeline.py --since-days 30  # first run, no fetch history yet
 ```
 
-`--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run after the [migration](#migration-one-time-after-upgrading), because migrated ledger entries do not count as fetch history: without it, the run stops on "impossible de déterminer un point de départ".
+`--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run, before any ledger entry exists: without it, the run stops on "impossible de déterminer un point de départ".
 
 Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure. It also stops before step 1 if `sheets_sync.py` has an unacknowledged error left over from a previous run (see the error gate above).
 
@@ -191,7 +158,7 @@ Requires its own OAuth2 token, `token_gmail_modify.json` (git-ignored), with the
 
 Deliberately restricted in scope, given how much `gmail.modify` technically allows: the only Gmail API call this module makes is `messages.modify` with a hardcoded body (`addLabelIds`/`removeLabelIds`, nothing caller-controlled beyond the label ID itself) - never `trash`, `delete`, `batchDelete`, or `send`. A safety cap (`MAX_MESSAGES_PER_RUN`, 200) refuses to proceed if the message list is implausibly large for one day's delta, guarding against a caller bug rather than a legitimate batch. Deleting old, already-labeled emails is out of scope for this module entirely - see `gmail_cleanup.py` below.
 
-**Recovering from a pipeline crash that happens after `extract_eml` succeeded** (e.g. `sheets_sync` or `gmail_labeling` failing on an expired OAuth token, see [Gmail OAuth2 setup](#gmail-oauth2-setup)): this step's delta is a snapshot of the ledger's `PENDING` entries taken right before `extract_eml` runs, recomputed fresh on every `run_pipeline.py` invocation. If `extract_eml` already flipped those entries to `OK`/`PARTIEL` before the crash, simply rerunning `run_pipeline.py` will not pick them back up for `gmail_labeling` - they are no longer `PENDING`. Catch them up manually instead:
+**Recovering from a pipeline crash that happens after `extract_eml` succeeded** (e.g. `sheets_sync` or `gmail_labeling` failing on an expired OAuth token, see [OAuth2 setup](docs/operations.md#oauth2-setup)): this step's delta is a snapshot of the ledger's `PENDING` entries taken right before `extract_eml` runs, recomputed fresh on every `run_pipeline.py` invocation. If `extract_eml` already flipped those entries to `OK`/`PARTIEL` before the crash, simply rerunning `run_pipeline.py` will not pick them back up for `gmail_labeling` - they are no longer `PENDING`. Catch them up manually instead:
 
 ```bash
 python3 -c "
@@ -238,19 +205,7 @@ python3 login_pipeline_check.py --prompt  # launched by the step above, inside a
 
 Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated marker, not the fetch ledger, since a day with zero new emails never updates the ledger's `fetched_at`, which would break a once-per-day check) and exits silently if today's check already happened. If not, it relaunches itself inside a terminal via `x-terminal-emulator` (Debian's generic terminal alternative) with `--prompt`, which asks the user directly and runs `run_pipeline.py` (via the project's own `.venv`) if confirmed. The marker is stamped regardless of the answer, so it will not ask again until the next calendar day.
 
-**One-time local setup** (not managed by this repo): create an XDG autostart entry so a graphical login launches the check.
-
-```
-# ~/.config/autostart/jobflow-pipeline-check.desktop
-[Desktop Entry]
-Type=Application
-Name=JobFlow pipeline check
-Comment=Propose de lancer le pipeline JobFlow (une fois par jour maximum)
-Exec=/usr/bin/python3 /path/to/JobFlow/login_pipeline_check.py
-X-GNOME-Autostart-enabled=true
-NoDisplay=true
-Hidden=false
-```
+**One-time local setup** (not managed by this repo): see [Autostart](docs/operations.md#autostart-login-triggered-pipeline-check) in the operations doc.
 
 ---
 
@@ -266,15 +221,9 @@ Run only against a duplicated **test** sheet, never production. Files written: n
 
 ---
 
-## Gmail OAuth2 setup
+## Operations
 
-`fetch_gmail.py` needs a Google Cloud project with the Gmail API enabled and a one-time OAuth2 authorization (`credentials.json` and `token.json`, both git-ignored). See `docs/setup_gmail_auth.md` for the full walkthrough, including the "Access blocked" testing-mode pitfall and how to verify a silent token refresh.
-
----
-
-## Google Sheets OAuth2 setup
-
-`sheets_sync.py` needs its own OAuth2 token, `token_sheets.json` (git-ignored), authorized with the `spreadsheets` scope. It reuses the same OAuth client as Gmail (`credentials.json`) but keeps a separate token file since the scopes differ. The first real run opens a browser for a one-time consent screen; after that, `auth.get_credentials()` refreshes the token silently, the same way it already does for Gmail.
+OAuth2 setup (Gmail, Sheets, Gmail labeling), autostart, and sync-failure recovery: see [docs/operations.md](docs/operations.md).
 
 ---
 
@@ -409,9 +358,7 @@ pre-commit install   # once, to enable the git hook
 
 ## Roadmap
 
-**Automating the Sheets import** was implemented in `sheets_sync.py` (see above). Offers now land directly in the master tracking sheet via the Google Sheets API, gated behind a persistent error state that blocks further syncs after a failed run until acknowledged, closing the gap this section used to describe as deliberately deferred.
-
-**Cleaning up already-processed Gmail emails** was implemented in `gmail_cleanup.py` (see above): a manually-triggered script that moves already-labeled emails to Trash, cross-checked against the local ledger rather than trusting the Gmail label alone.
+See [docs/roadmap.md](docs/roadmap.md).
 
 ---
 
