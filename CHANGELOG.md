@@ -51,6 +51,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Always write headers on daily import_YYYYMMDD.csv files
 - Stop committing the real spreadsheet ID, force-text Source/Dept
 - Fall back to interactive re-auth when a refresh token is dead
+- *(ci)* Use npx git-cliff instead of the Docker-based action
 
 
 ### Refactor
@@ -90,6 +91,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Add bilingual cross-link banner and French version of Gmail OAuth2 setup
 - Remove stale docs/workflow.md
 - Add GitHub PR and issue templates
+- Add changelog automation via git-cliff
 
 
 ### Miscellaneous Tasks
