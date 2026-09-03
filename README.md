@@ -148,6 +148,23 @@ Files written: nothing durable locally besides `logs/sheets_sync_error.json` on 
 
 ---
 
+### `sheets_sync_recovery.py`
+
+Manually-triggered only - never called by `run_pipeline.py`. Because `sheets_sync.py` only ever looks at **today's** import CSV (see above), an unacknowledged failure on one day followed by a normal run on a later day silently orphans that day's rows forever: they're never resynced, and the sheet's "highest ID" bookkeeping has already moved past them, so nothing downstream notices the hole on its own. This script detects and repairs exactly that.
+
+```bash
+python3 sheets_sync_recovery.py --dry-run   # report only, no write
+python3 sheets_sync_recovery.py             # backfill what's found
+```
+
+Compares every offer ID in the sheet's column A against `output/offres.csv` (the cumulative local archive, expected to be perfectly ID-contiguous from `E000001`) to find any ID missing from the sheet - an internal gap or a lagging tail, same detection either way. Each missing contiguous run is appended at the sheet's current end, preceded by one blank separator row so a backfilled batch stays visually distinguishable from a normal same-day sync. Column A briefly ends up out of strict numeric order after a backfill (cosmetic only - nothing downstream depends on ordering; reorder by hand if desired).
+
+If `output/offres.csv` itself has a gap, that's a different and more serious anomaly - the script refuses to guess and raises instead of trying to patch it.
+
+Safe to rerun after an interruption (e.g. hitting the Sheets API's per-minute write quota partway through a large backfill): it re-reads the sheet's actual state at the start of every run, so already-written sequences simply stop showing up as missing.
+
+---
+
 ### `run_pipeline.py`
 
 Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` → `gmail_labeling` in sequence.
@@ -415,7 +432,7 @@ Personal project with a dual purpose:
 | Email fetch | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sheet sync | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Geocoding fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
-| Testing | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 148 tests |
+| Testing | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 183 tests |
 | Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
 | Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
