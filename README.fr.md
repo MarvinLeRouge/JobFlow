@@ -8,7 +8,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-148%20passants-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-185%20passants-brightgreen)
 ![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)
 
 ---
