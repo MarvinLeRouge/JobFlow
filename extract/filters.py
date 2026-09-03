@@ -26,6 +26,11 @@ def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
     return None
 
 
+def blacklist_category(term: str, categories: dict[str, str]) -> str:
+    """Retourne la catégorie configurée pour un terme blacklisté, ou le terme lui-même sinon."""
+    return categories.get(term, term)
+
+
 def extract_stack(text: str, keywords: dict) -> str:
     """Retourne les tags tech trouvés dans le texte, séparés par virgules."""
     text_lower = text.lower()
