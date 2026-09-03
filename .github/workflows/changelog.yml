@@ -1,0 +1,32 @@
+name: Update Changelog
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "CHANGELOG.md"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Regenerate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --output CHANGELOG.md
+      - name: Open pull request if changed
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: CHANGELOG.md
+          commit-message: "chore(changelog): update CHANGELOG.md"
+          title: "chore(changelog): update CHANGELOG.md"
+          body: Automated CHANGELOG.md regeneration via git-cliff, triggered by a push to main.
+          branch: chore/update-changelog
+          delete-branch: true
