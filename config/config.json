@@ -196,6 +196,17 @@
     "indépendant immobilier",
     "néggociateur immobilier"
   ],
+  "blacklist_categories": {
+    "nounou": "aide à domicile",
+    "auxiliaire de vie": "aide à domicile",
+    "aide à domicile": "aide à domicile",
+    "garde d'enfant": "aide à domicile",
+    "babysitter": "aide à domicile",
+    "mandataire immobilier": "immobilier",
+    "commercial immobilier": "immobilier",
+    "indépendant immobilier": "immobilier",
+    "néggociateur immobilier": "immobilier"
+  },
   "sheets_sync": {
     "spreadsheet_id": "",
     "sheet_name": "Offres",
