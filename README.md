@@ -42,39 +42,6 @@ output/import_YYYYMMDD.csv  ← new offers from this run, still produced
 
 ---
 
-## Migration (one-time, after upgrading)
-
-Two one-shot scripts bring an existing installation up to date with the Gmail pipeline. They must be run **in this order**, and both must be run **before** `extract_eml.py` or `run_pipeline.py` is used for real: otherwise `Message_ID` is silently dropped from the exported rows.
-
-**1. Legacy index to ledger** (turns `logs/eml_index.csv` into `logs/email_ledger.json`):
-
-```bash
-python3 migrate_eml_index_to_ledger.py --dry-run   # review the entry count first
-python3 migrate_eml_index_to_ledger.py             # write logs/email_ledger.json
-```
-
-The old `logs/eml_index.csv` is left in place, remove it by hand once the ledger looks right.
-
-**2. Message_ID column** (adds the column to `output/offres.csv` and to `offres_csv_headers` in `config/config.json`):
-
-```bash
-cp output/offres.csv output/offres.csv.bak         # recommended, see the note below
-python3 migrate_offres_add_message_id.py --dry-run # review the row count first
-python3 migrate_offres_add_message_id.py           # write the column
-```
-
-Both files are written to a temp file and moved into place, so an interrupted run cannot truncate them, and `config/config.json` is edited in place rather than reserialized, so its formatting survives. Backing up `output/offres.csv` by hand is still recommended: `output/` is git-ignored, there is no history to fall back on.
-
-Once both migrations have run for real, `extract_eml.py` and `run_pipeline.py` can be used normally. The very first fetch after migration needs an explicit start date, since migrated entries carry no real fetch history:
-
-```bash
-python3 run_pipeline.py --since-days 30
-```
-
-**Sheets sync target:** `sheets_sync.py` itself needs no data migration, but the real spreadsheet ID must be set in `config/config.local.json` (git-ignored, see [Configuration](#configuration) below) before relying on `sheets_sync.py` or `run_pipeline.py` for actual use.
-
----
-
 ## Scripts
 
 ### `fetch_gmail.py`
@@ -172,10 +139,10 @@ Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` �
 ```bash
 python3 run_pipeline.py                  # full pipeline
 python3 run_pipeline.py --dry-run        # simulate all five steps
-python3 run_pipeline.py --since-days 30  # first run after migration
+python3 run_pipeline.py --since-days 30  # first run, no fetch history yet
 ```
 
-`--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run after the [migration](#migration-one-time-after-upgrading), because migrated ledger entries do not count as fetch history: without it, the run stops on "impossible de déterminer un point de départ".
+`--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run, before any ledger entry exists: without it, the run stops on "impossible de déterminer un point de départ".
 
 Fail-fast: the pipeline stops at the first step that raises, so a later step never runs against a state left inconsistent by an earlier failure. It also stops before step 1 if `sheets_sync.py` has an unacknowledged error left over from a previous run (see the error gate above).
 
