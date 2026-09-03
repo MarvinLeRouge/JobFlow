@@ -56,7 +56,7 @@ python3 fetch_gmail.py --since-days 30  # premier run uniquement : emails des 30
 
 `--since-days` n'est nécessaire que pour le tout premier run, quand le ledger n'a encore aucun historique de fetch. Les runs suivants déterminent automatiquement leur date de départ à partir du `fetched_at` le plus récent du ledger, avec une marge de sécurité pour ne rien perdre entre deux runs.
 
-Nécessite une configuration OAuth2 Gmail préalable (une seule fois), voir `docs/setup_gmail_auth.md`.
+Nécessite une configuration OAuth2 Gmail préalable (une seule fois), voir `docs/setup_gmail_auth.fr.md`.
 
 Fichiers écrits : fichiers `.eml` dans `sources/<provider>/`, `logs/email_ledger.json`.
 

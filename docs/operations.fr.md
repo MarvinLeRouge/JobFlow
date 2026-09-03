@@ -8,7 +8,7 @@ Tâches d'exploitation courantes pour faire tourner ce pipeline sur sa propre ma
 
 ## Configuration OAuth2
 
-**Gmail :** `fetch_gmail.py` nécessite un projet Google Cloud avec l'API Gmail activée et une autorisation OAuth2 réalisée une seule fois (`credentials.json` et `token.json`, tous deux exclus du dépôt). Voir [docs/setup_gmail_auth.md](setup_gmail_auth.md) pour le pas-à-pas complet (actuellement disponible en anglais uniquement), y compris le piège de l'erreur "Access blocked" en mode test et la vérification du rafraîchissement silencieux du token.
+**Gmail :** `fetch_gmail.py` nécessite un projet Google Cloud avec l'API Gmail activée et une autorisation OAuth2 réalisée une seule fois (`credentials.json` et `token.json`, tous deux exclus du dépôt). Voir [docs/setup_gmail_auth.fr.md](setup_gmail_auth.fr.md) pour le pas-à-pas complet, y compris le piège de l'erreur "Access blocked" en mode test et la vérification du rafraîchissement silencieux du token.
 
 **Google Sheets :** `sheets_sync.py` a besoin de son propre token OAuth2, `token_sheets.json` (exclu du dépôt), autorisé avec le scope `spreadsheets`. Il réutilise le même client OAuth que Gmail (`credentials.json`) mais garde un fichier de token séparé puisque les scopes diffèrent. Le premier run réel ouvre un navigateur pour l'écran de consentement une seule fois ; ensuite, `auth.get_credentials()` rafraîchit le token silencieusement, comme il le fait déjà pour Gmail.
 

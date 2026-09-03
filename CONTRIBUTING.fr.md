@@ -9,7 +9,7 @@ Ceci est un projet personnel, mais les contributions externes (signalement de bu
 ## Prérequis
 
 - Python 3.13
-- Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.md](docs/setup_gmail_auth.md)). Non nécessaire pour lancer la suite de tests.
+- Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.fr.md](docs/setup_gmail_auth.fr.md)). Non nécessaire pour lancer la suite de tests.
 
 ## Installation locale
 
