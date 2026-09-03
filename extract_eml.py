@@ -28,7 +28,7 @@ from email import policy
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from extract.filters import build_cle_dedup, extract_stack, is_blacklisted
+from extract.filters import blacklist_category, build_cle_dedup, extract_stack, is_blacklisted
 from extract.geo import get_dept
 from extract.io import (
     append_history,
@@ -127,6 +127,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
     headers = config["offres_csv_headers"]
     keywords = config["stack_keywords"]
     blacklist = config.get("blacklist_titres", [])
+    blacklist_categories = config.get("blacklist_categories", {})
     ville_dept = {k.lower(): v for k, v in config["ville_dept"].items()}
 
     ledger = load_ledger(LEDGER_FILE)
@@ -292,7 +293,11 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 "URL_qualite": offer.get("url_qualite", "vide"),
                 "URL_redirect": "",
                 "Stack": stack,
-                "Raison_exclusion": f"Blacklisté: {bl_term}" if bl_term else "",
+                "Raison_exclusion": (
+                    f"Blacklisté: {blacklist_category(bl_term, blacklist_categories)}"
+                    if bl_term
+                    else ""
+                ),
                 "Date_candidature": "",
                 "Notes": notes,
                 "Message_ID": message_id,
