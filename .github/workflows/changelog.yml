@@ -16,11 +16,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Regenerate changelog
-        uses: orhun/git-cliff-action@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          config: cliff.toml
-          args: --output CHANGELOG.md
+          node-version: 20
+      - name: Regenerate changelog
+        run: npx --yes git-cliff --config cliff.toml --output CHANGELOG.md
       - name: Open pull request if changed
         uses: peter-evans/create-pull-request@v7
         with:
