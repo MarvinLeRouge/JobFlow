@@ -376,9 +376,7 @@ pre-commit install   # une seule fois, pour activer le hook git
 
 ## Roadmap
 
-**L'automatisation de l'import Sheets** a été mise en œuvre dans `sheets_sync.py` (voir ci-dessus). Les offres atterrissent désormais directement dans la feuille de suivi principale via l'API Google Sheets, protégées par un état d'erreur persistant qui bloque les synchronisations suivantes après un échec jusqu'à acquittement, ce qui referme le point que cette section décrivait auparavant comme volontairement écarté.
-
-**Nettoyer les emails Gmail déjà traités** a été mis en œuvre dans `gmail_cleanup.py` (voir ci-dessus) : un script déclenché manuellement qui met à la corbeille les emails déjà labellisés, en recoupant avec le ledger local plutôt qu'en se fiant seulement au label Gmail.
+Voir [docs/roadmap.fr.md](docs/roadmap.fr.md).
 
 ---
 
