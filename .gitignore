@@ -19,6 +19,6 @@ config/config.local.json
 graphify-out
 .husky
 
-docs/ai/
+docs/work-in-progress/
 docs/superpowers/
 backups/
