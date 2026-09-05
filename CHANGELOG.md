@@ -91,5 +91,6 @@ run `git-cliff -o CHANGELOG.md`.
 - Untrack stray __pycache__/*.pyc files
 - *(docs)* Update test count badge to 185
 - *(changelog)* Homogenize changelog workflow
+- Standardize AI working notes folder to docs/work-in-progress
 
 
