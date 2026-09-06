@@ -82,6 +82,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Remove stale docs/workflow.md
 - Add GitHub PR and issue templates
 - Add changelog automation via git-cliff
+- Relocate architecture doc under docs/
 
 
 ### Miscellaneous Tasks
