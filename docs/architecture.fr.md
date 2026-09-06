@@ -1,6 +1,6 @@
 # Architecture
 
-Ce document couvre le *pourquoi* des principaux choix de conception. Pour l'usage et la configuration, voir [README.fr.md](README.fr.md).
+Ce document couvre le *pourquoi* des principaux choix de conception. Pour l'usage et la configuration, voir [README.fr.md](../README.fr.md).
 
 ---
 
@@ -28,7 +28,7 @@ Un scraper HTML générique piloté par config n'aurait pas valu le coup : ce so
 
 `rename_eml.py` dédoublonne déjà au niveau email, par Message-ID : le même email d'alerte ne peut pas être traité deux fois. Ça ne suffit pas en soi, car la *même offre* est régulièrement envoyée par plusieurs providers en même temps (ex : LinkedIn et Indeed relayant tous les deux la même annonce).
 
-`extract_eml.py` ajoute une seconde clé de dédup cross-provider (`Cle_dedup`, voir [README.fr.md](README.fr.md#déduplication)) construite à partir de l'entreprise normalisée, de la ville et d'un slug de titre débarrassé des mots vides — volontairement floue (insensible à la casse/aux accents, sans ponctuation) plutôt qu'une correspondance exacte, car le texte titre/entreprise d'une même offre est rarement identique au caractère près entre les templates de deux providers.
+`extract_eml.py` ajoute une seconde clé de dédup cross-provider (`Cle_dedup`, voir [README.fr.md](../README.fr.md#déduplication)) construite à partir de l'entreprise normalisée, de la ville et d'un slug de titre débarrassé des mots vides — volontairement floue (insensible à la casse/aux accents, sans ponctuation) plutôt qu'une correspondance exacte, car le texte titre/entreprise d'une même offre est rarement identique au caractère près entre les templates de deux providers.
 
 ---
 
@@ -48,7 +48,7 @@ Le raisonnement : un échec de sync Sheets en plein milieu d'un lot de lignes es
 
 ## L'onglet Références : une dépendance vivante, pas un template one-shot
 
-`sheets_sync.py` copie le formatage de cellules (listes déroulantes, couleurs) depuis un onglet dédié "Références" sur chaque ligne nouvellement ajoutée, à *chaque* run de sync — pas une seule fois à la configuration. C'est un contournement, pas la conception d'origine : l'API Sheets s'est avérée ne pas exposer du tout les *couleurs* des règles de validation/liste déroulante, donc le copier-coller en direct depuis deux cellules de référence connues était la seule façon fiable de les reproduire. Le compromis est documenté dans [README.fr.md](README.fr.md#important--longlet-références-est-une-dépendance-active) : la structure de cet onglet devient une dépendance silencieuse que rien ne vérifie ni ne signale en cas de casse.
+`sheets_sync.py` copie le formatage de cellules (listes déroulantes, couleurs) depuis un onglet dédié "Références" sur chaque ligne nouvellement ajoutée, à *chaque* run de sync — pas une seule fois à la configuration. C'est un contournement, pas la conception d'origine : l'API Sheets s'est avérée ne pas exposer du tout les *couleurs* des règles de validation/liste déroulante, donc le copier-coller en direct depuis deux cellules de référence connues était la seule façon fiable de les reproduire. Le compromis est documenté dans [README.fr.md](../README.fr.md#important--longlet-références-est-une-dépendance-active) : la structure de cet onglet devient une dépendance silencieuse que rien ne vérifie ni ne signale en cas de casse.
 
 ---
 

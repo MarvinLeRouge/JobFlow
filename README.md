@@ -16,7 +16,7 @@
 Python pipeline for processing job alert emails.
 Offers are fetched from Gmail, extracted from `.eml` files, deduplicated, and synced into Google Sheets.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the design rationale behind the pipeline, the dedup strategy, and the provider parsers.
+See [docs/architecture.md](docs/architecture.md) for the design rationale behind the pipeline, the dedup strategy, and the provider parsers.
 
 ---
 

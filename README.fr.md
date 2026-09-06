@@ -16,7 +16,7 @@
 Pipeline Python de traitement des alertes emploi reçues par email.
 Les offres sont récupérées depuis Gmail, extraites des fichiers `.eml`, dédoublonnées, puis synchronisées dans Google Sheets.
 
-Voir [ARCHITECTURE.fr.md](ARCHITECTURE.fr.md) pour les choix de conception derrière le pipeline, la stratégie de dédup et les parseurs providers.
+Voir [docs/architecture.fr.md](docs/architecture.fr.md) pour les choix de conception derrière le pipeline, la stratégie de dédup et les parseurs providers.
 
 ---
 

@@ -1,6 +1,6 @@
 # Architecture
 
-This document covers the *why* behind the main design choices. For usage and configuration, see [README.md](README.md).
+This document covers the *why* behind the main design choices. For usage and configuration, see [README.md](../README.md).
 
 ---
 
@@ -28,7 +28,7 @@ A generic, configuration-driven HTML scraper was not worth building: these are m
 
 `rename_eml.py` already deduplicates at the email level, by Message-ID: the same alert email can't be processed twice. That's not enough on its own, because the *same job posting* routinely gets sent by several providers at once (e.g. LinkedIn and Indeed both relaying the same listing).
 
-`extract_eml.py` adds a second, cross-provider dedup key (`Cle_dedup`, see [README.md](README.md#deduplication)) built from the normalized company, city and a stop-word-stripped title slug — deliberately fuzzy (case/accent-insensitive, no punctuation) rather than an exact string match, since the same offer's title/company text is rarely byte-identical across two providers' templates.
+`extract_eml.py` adds a second, cross-provider dedup key (`Cle_dedup`, see [README.md](../README.md#deduplication)) built from the normalized company, city and a stop-word-stripped title slug — deliberately fuzzy (case/accent-insensitive, no punctuation) rather than an exact string match, since the same offer's title/company text is rarely byte-identical across two providers' templates.
 
 ---
 
@@ -48,7 +48,7 @@ The reasoning: a Sheets sync failure partway through a batch of rows is exactly 
 
 ## The Références tab: a live dependency, not a one-time template
 
-`sheets_sync.py` copies cell formatting (dropdowns, colors) from a dedicated "Références" tab onto every newly-appended row, on *every* sync run — not once at setup time. This is a workaround, not the original design: the Sheets API turned out not to expose conditional dropdown/validation *colors* at all, so live copy-paste from two known-good reference cells was the only reliable way to reproduce them. The trade-off is documented in [README.md](README.md#important-the-références-tab-is-a-live-dependency): the tab's structure becomes a silent dependency that nothing enforces or errors on if broken.
+`sheets_sync.py` copies cell formatting (dropdowns, colors) from a dedicated "Références" tab onto every newly-appended row, on *every* sync run — not once at setup time. This is a workaround, not the original design: the Sheets API turned out not to expose conditional dropdown/validation *colors* at all, so live copy-paste from two known-good reference cells was the only reliable way to reproduce them. The trade-off is documented in [README.md](../README.md#important-the-références-tab-is-a-live-dependency): the tab's structure becomes a silent dependency that nothing enforces or errors on if broken.
 
 ---
 
