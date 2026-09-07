@@ -93,5 +93,6 @@ run `git-cliff -o CHANGELOG.md`.
 - *(docs)* Update test count badge to 185
 - *(changelog)* Homogenize changelog workflow
 - Standardize AI working notes folder to docs/work-in-progress
+- Add GitHub Actions workflow for lint and tests
 
 
