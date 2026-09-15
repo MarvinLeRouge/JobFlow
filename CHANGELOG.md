@@ -37,6 +37,8 @@ run `git-cliff -o CHANGELOG.md`.
 - Add manual Gmail cleanup script for already-labeled emails
 - *(sheets)* Add manual sync recovery script for gap detection and backfill
 - *(extract)* Simplify blacklist reason to a category in Raison_exclusion
+- *(extract)* Flag stage/alternance titles directly into Raison_exclusion
+- *(extract)* Flag C++/C#/.Net/Java offers directly into Raison_exclusion
 
 
 ### Bug Fixes
@@ -52,6 +54,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Stop committing the real spreadsheet ID, force-text Source/Dept
 - Fall back to interactive re-auth when a refresh token is dead
 - *(ci)* Use npx git-cliff instead of the Docker-based action
+- *(extract)* Use row id instead of generic placeholder in Cle_dedup fallback
 
 
 ### Refactor
