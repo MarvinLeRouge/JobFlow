@@ -207,6 +207,12 @@
     "indépendant immobilier": "immobilier",
     "néggociateur immobilier": "immobilier"
   },
+  "stage_alternance_titres": [
+    "alternance",
+    "alternant",
+    "stage",
+    "stagiaire"
+  ],
   "sheets_sync": {
     "spreadsheet_id": "",
     "sheet_name": "Offres",

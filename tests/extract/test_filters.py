@@ -1,4 +1,10 @@
-from extract.filters import blacklist_category, build_cle_dedup, extract_stack, is_blacklisted
+from extract.filters import (
+    blacklist_category,
+    build_cle_dedup,
+    extract_stack,
+    is_blacklisted,
+    is_stage_alternance,
+)
 
 
 def test_build_cle_dedup_normalizes_case_accents_and_separators():
@@ -31,6 +37,16 @@ def test_is_blacklisted_returns_none_when_no_term_matches():
 def test_is_blacklisted_returns_first_matching_blacklist_entry():
     blacklist = ["python", "developpeur"]
     assert is_blacklisted("Développeur Python", blacklist) == "python"
+
+
+def test_is_stage_alternance_matches_case_and_accent_insensitively():
+    terms = ["alternance", "alternant", "stage", "stagiaire"]
+    assert is_stage_alternance("Développeur en ALTERNANCE H/F", terms) == "alternance"
+
+
+def test_is_stage_alternance_returns_none_when_no_term_matches():
+    terms = ["alternance", "alternant", "stage", "stagiaire"]
+    assert is_stage_alternance("Développeur Python CDI", terms) is None
 
 
 def test_extract_stack_finds_multiple_technologies():

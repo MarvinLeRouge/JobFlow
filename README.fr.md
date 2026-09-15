@@ -237,6 +237,7 @@ Configuration OAuth2 (Gmail, Sheets, étiquetage Gmail), autostart, et récupér
 | `stack_keywords` | mots-clés de détection de stack technique |
 | `ville_dept` | correspondance ville → numéro de département |
 | `blacklist_titres` | titres à marquer automatiquement (ex : "nounou", "garde d'enfant") |
+| `stage_alternance_titres` | titres à marquer comme stage/alternance (ex : "stage", "alternance") |
 | `sheets_sync` | cible de synchronisation Sheets et coordonnées des cellules de référence, voir ci-dessous |
 
 #### `sheets_sync`
@@ -314,6 +315,20 @@ La ligne est conservée dans le CSV et importée normalement dans Sheets.
 
 ---
 
+## Détection stage/alternance
+
+Les termes définis dans `stage_alternance_titres` (config.json, ex : "stage", "alternance") sont
+recherchés dans le titre à chaque extraction, sans sensibilité à la casse ni aux accents, de la
+même façon que la blacklist de titres. Ce test n'est effectué que si le titre n'est pas déjà
+blacklisté.
+
+Si un titre correspond : `Raison_exclusion` prend la valeur `Stage/Alternance`, une des valeurs
+déjà présentes dans la liste déroulante de la colonne R.
+
+La ligne est conservée dans le CSV et importée normalement dans Sheets.
+
+---
+
 ## Google Sheets - import et mise en forme
 
 **Import :** désormais automatisé par `sheets_sync.py` (voir ci-dessus). L'import manuel (Données → Importer → Ajouter à la fin de la feuille, en sélectionnant `output/import_YYYYMMDD.csv`) n'est plus le chemin normal, mais reste utilisable en secours si `sheets_sync.py` est bloqué ou indisponible.
@@ -329,7 +344,7 @@ La ligne est conservée dans le CSV et importée normalement dans Sheets.
 >
 > Les colonnes A à T n'ont pas changé depuis avant l'intégration Gmail. `Message_ID` a été ajoutée en dernière position (U) plutôt qu'insérée, pour que les formules de mise en forme conditionnelle ci-dessus (et toute autre formule référençant une colonne par sa lettre) continuent de fonctionner sans modification.
 >
-> La feuille porte aussi deux autres règles au niveau des lignes non détaillées ici (surlignage alternance/stage et surlignage du statut "En cours", ce dernier limité à la colonne A). `sheets_sync.py` étend automatiquement la plage de lignes des quatre règles quand il ajoute de nouvelles lignes, en conservant la portée de colonnes propre à chacune.
+> La feuille porte aussi deux autres règles au niveau des lignes non détaillées ici (surlignage alternance/stage, désormais redondant avec la détection en amont décrite dans [Détection stage/alternance](#détection-stagealternance), et surlignage du statut "En cours", ce dernier limité à la colonne A). `sheets_sync.py` étend automatiquement la plage de lignes des quatre règles quand il ajoute de nouvelles lignes, en conservant la portée de colonnes propre à chacune.
 
 ---
 

@@ -14,18 +14,31 @@ def build_cle_dedup(entreprise: str, ville: str, titre: str, row_id: str) -> str
     return f"{e}|{v}|{t}"
 
 
-def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
-    """Retourne le premier terme blacklisté trouvé dans le titre, ou None."""
-    _APOS = re.compile(r"[‘’‚‛ʼ′]")
+_APOS = re.compile(r"[‘’‚‛ʼ′]")
+
+
+def _titre_contains_any(titre: str, terms: list[str]) -> str | None:
+    """Retourne le premier terme trouvé dans le titre (recherche insensible à la
+    casse et aux accents), ou None."""
 
     def _norm(s: str) -> str:
         return _APOS.sub("'", strip_accents(s.lower()))
 
     titre_norm = _norm(titre)
-    for term in blacklist:
+    for term in terms:
         if _norm(term) in titre_norm:
             return term
     return None
+
+
+def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
+    """Retourne le premier terme blacklisté trouvé dans le titre, ou None."""
+    return _titre_contains_any(titre, blacklist)
+
+
+def is_stage_alternance(titre: str, terms: list[str]) -> str | None:
+    """Retourne le premier terme stage/alternance trouvé dans le titre, ou None."""
+    return _titre_contains_any(titre, terms)
 
 
 def blacklist_category(term: str, categories: dict[str, str]) -> str:

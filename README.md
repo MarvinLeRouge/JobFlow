@@ -237,6 +237,7 @@ OAuth2 setup (Gmail, Sheets, Gmail labeling), autostart, and sync-failure recove
 | `stack_keywords` | keywords used to detect the tech stack |
 | `ville_dept` | city → département number mapping |
 | `blacklist_titres` | titles to auto-flag (e.g. "nounou", "garde d'enfant") |
+| `stage_alternance_titres` | titles to flag as internship/apprenticeship (e.g. "stage", "alternance") |
 | `sheets_sync` | Google Sheets sync target and reference-cell coordinates, see below |
 
 #### `sheets_sync`
@@ -314,6 +315,19 @@ The row is kept in the CSV and imported normally into Sheets.
 
 ---
 
+## Stage/alternance detection
+
+Terms defined in `stage_alternance_titres` (config.json, e.g. "stage", "alternance") are searched
+for in the title on every extraction, case- and accent-insensitive, the same way as the title
+blacklist. This check only runs when the title isn't already blacklisted.
+
+When a title matches: `Raison_exclusion` is set to `Stage/Alternance`, one of the values already
+present in column R's dropdown list.
+
+The row is kept in the CSV and imported normally into Sheets.
+
+---
+
 ## Google Sheets - import and formatting
 
 **Import:** now automated by `sheets_sync.py` (see above). Manual import (Data → Import → Append to current sheet, selecting `output/import_YYYYMMDD.csv`) is no longer the normal path, but still works as a fallback if `sheets_sync.py` is blocked or unavailable.
@@ -329,7 +343,7 @@ The row is kept in the CSV and imported normally into Sheets.
 >
 > Columns A through T are unchanged from before this pipeline's Gmail integration. `Message_ID` was appended as the last column (U) rather than inserted, so the conditional formatting formulas above (and any other formula referencing a lettered column) keep working without adjustment.
 >
-> The sheet also carries two further row-level rules not detailed here (alternance/stage highlighting and the "En cours" status highlight, the latter scoped to column A only). `sheets_sync.py` extends all four rules' row ranges automatically when it appends new rows, whichever column scope each one already has.
+> The sheet also carries two further row-level rules not detailed here (alternance/stage highlighting, now redundant with the upstream detection described in [Stage/alternance detection](#stagealternance-detection), and the "En cours" status highlight, the latter scoped to column A only). `sheets_sync.py` extends all four rules' row ranges automatically when it appends new rows, whichever column scope each one already has.
 
 ---
 
