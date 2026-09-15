@@ -238,6 +238,7 @@ Configuration OAuth2 (Gmail, Sheets, étiquetage Gmail), autostart, et récupér
 | `ville_dept` | correspondance ville → numéro de département |
 | `blacklist_titres` | titres à marquer automatiquement (ex : "nounou", "garde d'enfant") |
 | `stage_alternance_titres` | titres à marquer comme stage/alternance (ex : "stage", "alternance") |
+| `hors_stack_tags` | tags `Stack` détectés qui marquent une offre comme hors stack (ex : "Java", "C++") |
 | `sheets_sync` | cible de synchronisation Sheets et coordonnées des cellules de référence, voir ci-dessous |
 
 #### `sheets_sync`
@@ -324,6 +325,21 @@ blacklisté.
 
 Si un titre correspond : `Raison_exclusion` prend la valeur `Stage/Alternance`, une des valeurs
 déjà présentes dans la liste déroulante de la colonne R.
+
+La ligne est conservée dans le CSV et importée normalement dans Sheets.
+
+---
+
+## Détection hors stack
+
+Les tags définis dans `hors_stack_tags` (config.json, ex : "Java", "C++", "C#", ".Net") sont
+comparés à la colonne `Stack` détectée pour l'offre. Ce test n'est effectué que si le titre n'est
+pas déjà blacklisté ni marqué comme stage/alternance.
+
+Si le `Stack` contient un de ces tags : `Raison_exclusion` prend la valeur `Hors stack`, une des
+valeurs déjà présentes dans la liste déroulante de la colonne R. Comme le détecteur de stack
+recherche des mots entiers, "Java" ne matche jamais une mention de "JavaScript" (taggée `JS`), donc
+une offre JS/TS n'est pas concernée ici.
 
 La ligne est conservée dans le CSV et importée normalement dans Sheets.
 

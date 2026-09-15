@@ -41,6 +41,12 @@ def is_stage_alternance(titre: str, terms: list[str]) -> str | None:
     return _titre_contains_any(titre, terms)
 
 
+def is_hors_stack(stack: str, excluded_tags: list[str]) -> bool:
+    """True si le Stack détecté (tags séparés par des virgules) contient un des tags exclus."""
+    tags = set(stack.split(",")) if stack else set()
+    return bool(tags & set(excluded_tags))
+
+
 def blacklist_category(term: str, categories: dict[str, str]) -> str:
     """Retourne la catégorie configurée pour un terme blacklisté, ou le terme lui-même sinon."""
     return categories.get(term, term)

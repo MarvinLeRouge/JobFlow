@@ -213,6 +213,12 @@
     "stage",
     "stagiaire"
   ],
+  "hors_stack_tags": [
+    "C++",
+    "C#",
+    ".Net",
+    "Java"
+  ],
   "sheets_sync": {
     "spreadsheet_id": "",
     "sheet_name": "Offres",

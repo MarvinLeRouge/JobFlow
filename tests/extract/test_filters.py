@@ -3,6 +3,7 @@ from extract.filters import (
     build_cle_dedup,
     extract_stack,
     is_blacklisted,
+    is_hors_stack,
     is_stage_alternance,
 )
 
@@ -47,6 +48,21 @@ def test_is_stage_alternance_matches_case_and_accent_insensitively():
 def test_is_stage_alternance_returns_none_when_no_term_matches():
     terms = ["alternance", "alternant", "stage", "stagiaire"]
     assert is_stage_alternance("Développeur Python CDI", terms) is None
+
+
+def test_is_hors_stack_true_when_an_excluded_tag_is_present():
+    excluded = ["C++", "C#", ".Net", "Java"]
+    assert is_hors_stack("Java,Docker", excluded) is True
+
+
+def test_is_hors_stack_false_when_only_javascript_is_present():
+    excluded = ["C++", "C#", ".Net", "Java"]
+    assert is_hors_stack("JS,React", excluded) is False
+
+
+def test_is_hors_stack_false_when_stack_is_empty():
+    excluded = ["C++", "C#", ".Net", "Java"]
+    assert is_hors_stack("", excluded) is False
 
 
 def test_extract_stack_finds_multiple_technologies():

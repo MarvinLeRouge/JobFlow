@@ -238,6 +238,7 @@ OAuth2 setup (Gmail, Sheets, Gmail labeling), autostart, and sync-failure recove
 | `ville_dept` | city → département number mapping |
 | `blacklist_titres` | titles to auto-flag (e.g. "nounou", "garde d'enfant") |
 | `stage_alternance_titres` | titles to flag as internship/apprenticeship (e.g. "stage", "alternance") |
+| `hors_stack_tags` | detected `Stack` tags that flag an offer as out of stack (e.g. "Java", "C++") |
 | `sheets_sync` | Google Sheets sync target and reference-cell coordinates, see below |
 
 #### `sheets_sync`
@@ -323,6 +324,21 @@ blacklist. This check only runs when the title isn't already blacklisted.
 
 When a title matches: `Raison_exclusion` is set to `Stage/Alternance`, one of the values already
 present in column R's dropdown list.
+
+The row is kept in the CSV and imported normally into Sheets.
+
+---
+
+## Hors stack detection
+
+Tags defined in `hors_stack_tags` (config.json, e.g. "Java", "C++", "C#", ".Net") are checked
+against the offer's detected `Stack` column. This check only runs when the title isn't already
+blacklisted or flagged as stage/alternance.
+
+When the `Stack` contains one of these tags: `Raison_exclusion` is set to `Hors stack`, one of the
+values already present in column R's dropdown list. Because the `Stack` detector matches whole
+words, "Java" never matches on a "JavaScript" mention (tagged `JS` instead), so a JS/TS offer isn't
+flagged here.
 
 The row is kept in the CSV and imported normally into Sheets.
 
