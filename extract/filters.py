@@ -5,25 +5,46 @@ import re
 from extract.text import normalize, strip_accents, titre_slug
 
 
-def build_cle_dedup(entreprise: str, ville: str, titre: str) -> str:
-    e = normalize(entreprise) or "inconnu"
-    v = normalize(ville) or "inconnue"
-    t = titre_slug(titre) or "inconnu"
+def build_cle_dedup(entreprise: str, ville: str, titre: str, row_id: str) -> str:
+    """Construit la clé de dédup. Un champ vide est remplacé par row_id (et non par un
+    placeholder générique) pour éviter les fausses collisions entre offres distinctes."""
+    e = normalize(entreprise) or row_id
+    v = normalize(ville) or row_id
+    t = titre_slug(titre) or row_id
     return f"{e}|{v}|{t}"
 
 
-def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
-    """Retourne le premier terme blacklisté trouvé dans le titre, ou None."""
-    _APOS = re.compile(r"[‘’‚‛ʼ′]")
+_APOS = re.compile(r"[‘’‚‛ʼ′]")
+
+
+def _titre_contains_any(titre: str, terms: list[str]) -> str | None:
+    """Retourne le premier terme trouvé dans le titre (recherche insensible à la
+    casse et aux accents), ou None."""
 
     def _norm(s: str) -> str:
         return _APOS.sub("'", strip_accents(s.lower()))
 
     titre_norm = _norm(titre)
-    for term in blacklist:
+    for term in terms:
         if _norm(term) in titre_norm:
             return term
     return None
+
+
+def is_blacklisted(titre: str, blacklist: list[str]) -> str | None:
+    """Retourne le premier terme blacklisté trouvé dans le titre, ou None."""
+    return _titre_contains_any(titre, blacklist)
+
+
+def is_stage_alternance(titre: str, terms: list[str]) -> str | None:
+    """Retourne le premier terme stage/alternance trouvé dans le titre, ou None."""
+    return _titre_contains_any(titre, terms)
+
+
+def is_hors_stack(stack: str, excluded_tags: list[str]) -> bool:
+    """True si le Stack détecté (tags séparés par des virgules) contient un des tags exclus."""
+    tags = set(stack.split(",")) if stack else set()
+    return bool(tags & set(excluded_tags))
 
 
 def blacklist_category(term: str, categories: dict[str, str]) -> str:

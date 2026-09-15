@@ -28,7 +28,14 @@ from email import policy
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from extract.filters import blacklist_category, build_cle_dedup, extract_stack, is_blacklisted
+from extract.filters import (
+    blacklist_category,
+    build_cle_dedup,
+    extract_stack,
+    is_blacklisted,
+    is_hors_stack,
+    is_stage_alternance,
+)
 from extract.geo import get_dept
 from extract.io import (
     append_history,
@@ -128,6 +135,8 @@ def main(dry_run: bool, force_headers: bool | None = None):
     keywords = config["stack_keywords"]
     blacklist = config.get("blacklist_titres", [])
     blacklist_categories = config.get("blacklist_categories", {})
+    stage_alternance_titres = config.get("stage_alternance_titres", [])
+    hors_stack_tags = config.get("hors_stack_tags", [])
     ville_dept = {k.lower(): v for k, v in config["ville_dept"].items()}
 
     ledger = load_ledger(LEDGER_FILE)
@@ -155,6 +164,8 @@ def main(dry_run: bool, force_headers: bool | None = None):
         "offres_ecrites": 0,
         "doublons": 0,
         "blacklistes": 0,
+        "stage_alternance": 0,
+        "hors_stack": 0,
         "dry_run": dry_run,
     }
 
@@ -257,6 +268,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 offer.get("entreprise", ""),
                 offer.get("ville", ""),
                 offer["titre"],
+                eid,
             )
 
             doublon_id = ""
@@ -274,6 +286,16 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 stats["blacklistes"] += 1
                 marker = f"⛔ Blacklisté: {bl_term}"
                 notes = f"{notes} | {marker}" if notes else marker
+
+            sa_term = (
+                None if bl_term else is_stage_alternance(offer["titre"], stage_alternance_titres)
+            )
+            if sa_term:
+                stats["stage_alternance"] += 1
+
+            hors_stack = not bl_term and not sa_term and is_hors_stack(stack, hors_stack_tags)
+            if hors_stack:
+                stats["hors_stack"] += 1
 
             row = {
                 "ID": eid,
@@ -296,6 +318,10 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 "Raison_exclusion": (
                     f"Blacklisté: {blacklist_category(bl_term, blacklist_categories)}"
                     if bl_term
+                    else "Stage/Alternance"
+                    if sa_term
+                    else "Hors stack"
+                    if hors_stack
                     else ""
                 ),
                 "Date_candidature": "",
@@ -331,6 +357,8 @@ def main(dry_run: bool, force_headers: bool | None = None):
     print(f"  Offres écrites    : {stats['offres_ecrites']}")
     print(f"  Doublons détectés : {stats['doublons']}")
     print(f"  Blacklistés       : {stats['blacklistes']}")
+    print(f"  Stage/Alternance  : {stats['stage_alternance']}")
+    print(f"  Hors stack        : {stats['hors_stack']}")
     print(f"  Fichiers ignorés  : {stats['ignores']}")
     print(f"  Fichiers partiels : {stats['fichiers_partiel']}")
     print(f"  Erreurs           : {stats['erreurs']}")
