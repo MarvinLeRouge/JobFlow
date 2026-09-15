@@ -5,10 +5,12 @@ import re
 from extract.text import normalize, strip_accents, titre_slug
 
 
-def build_cle_dedup(entreprise: str, ville: str, titre: str) -> str:
-    e = normalize(entreprise) or "inconnu"
-    v = normalize(ville) or "inconnue"
-    t = titre_slug(titre) or "inconnu"
+def build_cle_dedup(entreprise: str, ville: str, titre: str, row_id: str) -> str:
+    """Construit la clé de dédup. Un champ vide est remplacé par row_id (et non par un
+    placeholder générique) pour éviter les fausses collisions entre offres distinctes."""
+    e = normalize(entreprise) or row_id
+    v = normalize(ville) or row_id
+    t = titre_slug(titre) or row_id
     return f"{e}|{v}|{t}"
 
 

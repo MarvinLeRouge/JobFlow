@@ -257,6 +257,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 offer.get("entreprise", ""),
                 offer.get("ville", ""),
                 offer["titre"],
+                eid,
             )
 
             doublon_id = ""

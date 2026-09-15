@@ -2,17 +2,19 @@ from extract.filters import blacklist_category, build_cle_dedup, extract_stack, 
 
 
 def test_build_cle_dedup_normalizes_case_accents_and_separators():
-    cle = build_cle_dedup("Société Générale", "Aix-en-Provence", "Développeur PHP Senior (H/F)")
+    cle = build_cle_dedup(
+        "Société Générale", "Aix-en-Provence", "Développeur PHP Senior (H/F)", "E000001"
+    )
     assert cle == "societegenerale|aixenprovence|developpeurphp"
 
 
-def test_build_cle_dedup_falls_back_to_placeholders_when_fields_are_empty():
-    assert build_cle_dedup("", "", "") == "inconnu|inconnue|inconnu"
+def test_build_cle_dedup_falls_back_to_row_id_when_fields_are_empty():
+    assert build_cle_dedup("", "", "", "E000001") == "E000001|E000001|E000001"
 
 
 def test_build_cle_dedup_is_stable_across_equivalent_variations():
-    a = build_cle_dedup("ACME Corp", "Toulon", "Développeur Python H/F")
-    b = build_cle_dedup("acme-corp", "TOULON", "développeur python")
+    a = build_cle_dedup("ACME Corp", "Toulon", "Développeur Python H/F", "E000001")
+    b = build_cle_dedup("acme-corp", "TOULON", "développeur python", "E000002")
     assert a == b
 
 
