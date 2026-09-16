@@ -247,20 +247,33 @@ def copy_reference_formatting(
     service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
 
+BLACKLIST_PREFIX = "Blacklisté: "
+
+
+def _is_freeform_raison(row: dict) -> bool:
+    """True if Raison_exclusion is extract_eml.py's freeform blacklist
+    marker (a category appended to a fixed prefix, never an exact dropdown
+    item) rather than empty or one of the exact values it also writes
+    (Stage/Alternance, Hors stack), which do match a column R dropdown item
+    verbatim."""
+    return row.get("Raison_exclusion", "").startswith(BLACKLIST_PREFIX)
+
+
 def rows_needing_r_dropdown(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
     """Contiguous (start, end) 1-indexed row ranges among the new rows whose
-    Raison_exclusion is empty - only these rows should get column R's
-    dropdown validation applied. Rows with a pre-filled exclusion reason
-    (e.g. extract_eml.py's blacklist marker) keep their plain value with no
-    validation, so Sheets never shows a 'not in list' warning triangle on
-    an automatically-determined value - confirmed needed live, the warning
-    appeared on a row whose Raison_exclusion came from the CSV, not from
-    the user picking a dropdown option."""
+    Raison_exclusion is empty or an exact dropdown item (Stage/Alternance,
+    Hors stack) - only these rows should get column R's dropdown validation
+    applied, so the value shows up selected in the dropdown rather than as
+    plain text. Rows with a freeform exclusion reason (extract_eml.py's
+    blacklist marker) keep their plain value with no validation, so Sheets
+    never shows a 'not in list' warning triangle on it - confirmed needed
+    live, the warning appeared on a row whose Raison_exclusion came from the
+    CSV, not from the user picking a dropdown option."""
     ranges = []
     range_start = None
     for i, row in enumerate(rows):
         row_number = start_row + i
-        if not row.get("Raison_exclusion", ""):
+        if not _is_freeform_raison(row):
             if range_start is None:
                 range_start = row_number
         else:
@@ -274,22 +287,23 @@ def rows_needing_r_dropdown(rows: list[dict], start_row: int) -> list[tuple[int,
 
 def rows_needing_r_clear(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
     """Contiguous 1-indexed row ranges among the new rows whose
-    Raison_exclusion is non-empty - these need column R's data validation
-    explicitly cleared. Newly appended rows can inherit stale dropdown
-    validation from the row above them regardless of what gets explicitly
-    copied afterward - confirmed live: a row deliberately excluded from
+    Raison_exclusion is a freeform value (extract_eml.py's blacklist
+    marker) - these need column R's data validation explicitly cleared.
+    Newly appended rows can inherit stale dropdown validation from the row
+    above them regardless of what gets explicitly copied afterward -
+    confirmed live: a row deliberately excluded from
     rows_needing_r_dropdown's copy still showed the inherited validation
     until cleared.
 
     This is an intentional structural mirror of rows_needing_r_dropdown
-    (same contiguous-range walk, with the Raison_exclusion truthiness check
-    inverted), kept as a separate function rather than consolidated into
-    one, so each stays simple and independently testable."""
+    (same contiguous-range walk, with the freeform check inverted), kept as
+    a separate function rather than consolidated into one, so each stays
+    simple and independently testable."""
     ranges = []
     range_start = None
     for i, row in enumerate(rows):
         row_number = start_row + i
-        if row.get("Raison_exclusion", ""):
+        if _is_freeform_raison(row):
             if range_start is None:
                 range_start = row_number
         else:

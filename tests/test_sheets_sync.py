@@ -353,10 +353,19 @@ def test_rows_needing_r_dropdown_includes_rows_with_empty_raison():
     assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 101)]
 
 
-def test_rows_needing_r_dropdown_excludes_rows_with_a_value():
+def test_rows_needing_r_dropdown_excludes_rows_with_a_blacklist_value():
     rows = [{"Raison_exclusion": "Blacklisté: test"}, {"Raison_exclusion": "Blacklisté: test2"}]
 
     assert rows_needing_r_dropdown(rows, start_row=100) == []
+
+
+def test_rows_needing_r_dropdown_includes_rows_with_an_exact_dropdown_value():
+    """Stage/Alternance and Hors stack are written by extract_eml.py as exact
+    dropdown items, not freeform text like the blacklist marker - they should
+    get the dropdown copy so the value shows up selected, not cleared."""
+    rows = [{"Raison_exclusion": "Stage/Alternance"}, {"Raison_exclusion": "Hors stack"}]
+
+    assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 101)]
 
 
 def test_rows_needing_r_dropdown_splits_into_contiguous_ranges():
@@ -377,7 +386,7 @@ def test_rows_needing_r_dropdown_handles_missing_key_as_empty():
     assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 100)]
 
 
-def test_rows_needing_r_clear_includes_rows_with_a_value():
+def test_rows_needing_r_clear_includes_rows_with_a_blacklist_value():
     rows = [{"Raison_exclusion": "Blacklisté: test"}, {"Raison_exclusion": "Blacklisté: test2"}]
 
     assert rows_needing_r_clear(rows, start_row=100) == [(100, 101)]
@@ -385,6 +394,12 @@ def test_rows_needing_r_clear_includes_rows_with_a_value():
 
 def test_rows_needing_r_clear_excludes_rows_with_empty_raison():
     rows = [{"Raison_exclusion": ""}, {"Raison_exclusion": ""}]
+
+    assert rows_needing_r_clear(rows, start_row=100) == []
+
+
+def test_rows_needing_r_clear_excludes_rows_with_an_exact_dropdown_value():
+    rows = [{"Raison_exclusion": "Stage/Alternance"}, {"Raison_exclusion": "Hors stack"}]
 
     assert rows_needing_r_clear(rows, start_row=100) == []
 
