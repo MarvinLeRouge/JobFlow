@@ -247,74 +247,6 @@ def copy_reference_formatting(
     service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
 
-BLACKLIST_PREFIX = "Blacklisté: "
-
-
-def _is_freeform_raison(row: dict) -> bool:
-    """True if Raison_exclusion is extract_eml.py's freeform blacklist
-    marker (a category appended to a fixed prefix, never an exact dropdown
-    item) rather than empty or one of the exact values it also writes
-    (Stage/Alternance, Hors stack), which do match a column R dropdown item
-    verbatim."""
-    return row.get("Raison_exclusion", "").startswith(BLACKLIST_PREFIX)
-
-
-def rows_needing_r_dropdown(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
-    """Contiguous (start, end) 1-indexed row ranges among the new rows whose
-    Raison_exclusion is empty or an exact dropdown item (Stage/Alternance,
-    Hors stack) - only these rows should get column R's dropdown validation
-    applied, so the value shows up selected in the dropdown rather than as
-    plain text. Rows with a freeform exclusion reason (extract_eml.py's
-    blacklist marker) keep their plain value with no validation, so Sheets
-    never shows a 'not in list' warning triangle on it - confirmed needed
-    live, the warning appeared on a row whose Raison_exclusion came from the
-    CSV, not from the user picking a dropdown option."""
-    ranges = []
-    range_start = None
-    for i, row in enumerate(rows):
-        row_number = start_row + i
-        if not _is_freeform_raison(row):
-            if range_start is None:
-                range_start = row_number
-        else:
-            if range_start is not None:
-                ranges.append((range_start, row_number - 1))
-                range_start = None
-    if range_start is not None:
-        ranges.append((range_start, start_row + len(rows) - 1))
-    return ranges
-
-
-def rows_needing_r_clear(rows: list[dict], start_row: int) -> list[tuple[int, int]]:
-    """Contiguous 1-indexed row ranges among the new rows whose
-    Raison_exclusion is a freeform value (extract_eml.py's blacklist
-    marker) - these need column R's data validation explicitly cleared.
-    Newly appended rows can inherit stale dropdown validation from the row
-    above them regardless of what gets explicitly copied afterward -
-    confirmed live: a row deliberately excluded from
-    rows_needing_r_dropdown's copy still showed the inherited validation
-    until cleared.
-
-    This is an intentional structural mirror of rows_needing_r_dropdown
-    (same contiguous-range walk, with the freeform check inverted), kept as
-    a separate function rather than consolidated into one, so each stays
-    simple and independently testable."""
-    ranges = []
-    range_start = None
-    for i, row in enumerate(rows):
-        row_number = start_row + i
-        if _is_freeform_raison(row):
-            if range_start is None:
-                range_start = row_number
-        else:
-            if range_start is not None:
-                ranges.append((range_start, row_number - 1))
-                range_start = None
-    if range_start is not None:
-        ranges.append((range_start, start_row + len(rows) - 1))
-    return ranges
-
-
 def clear_data_validation(
     service,
     spreadsheet_id: str,
@@ -481,26 +413,16 @@ def run(dry_run: bool, today: str | None = None) -> None:
             start_row,
             end_row,
         )
-        for r_start, r_end in rows_needing_r_dropdown(new_rows, start_row):
-            copy_reference_formatting(
-                service,
-                spreadsheet_id,
-                sheet_id,
-                reference_sheet_id,
-                reference_row_r,
-                raison_col_index,
-                r_start,
-                r_end,
-            )
-        for r_start, r_end in rows_needing_r_clear(new_rows, start_row):
-            clear_data_validation(
-                service,
-                spreadsheet_id,
-                sheet_id,
-                raison_col_index,
-                r_start,
-                r_end,
-            )
+        copy_reference_formatting(
+            service,
+            spreadsheet_id,
+            sheet_id,
+            reference_sheet_id,
+            reference_row_r,
+            raison_col_index,
+            start_row,
+            end_row,
+        )
         write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
         extend_conditional_format_ranges(service, spreadsheet_id, sheet_id, new_end_row=end_row)
 

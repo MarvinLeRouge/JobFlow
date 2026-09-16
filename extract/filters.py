@@ -47,11 +47,6 @@ def is_hors_stack(stack: str, excluded_tags: list[str]) -> bool:
     return bool(tags & set(excluded_tags))
 
 
-def blacklist_category(term: str, categories: dict[str, str]) -> str:
-    """Retourne la catégorie configurée pour un terme blacklisté, ou le terme lui-même sinon."""
-    return categories.get(term, term)
-
-
 def extract_stack(text: str, keywords: dict) -> str:
     """Retourne les tags tech trouvés dans le texte, séparés par virgules."""
     text_lower = text.lower()

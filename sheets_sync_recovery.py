@@ -124,21 +124,16 @@ def run(dry_run: bool) -> None:
             start_row,
             end_row,
         )
-        for r_start, r_end in sheets_sync.rows_needing_r_dropdown(rows, start_row):
-            sheets_sync.copy_reference_formatting(
-                service,
-                spreadsheet_id,
-                sheet_id,
-                reference_sheet_id,
-                reference_row_r,
-                raison_col_index,
-                r_start,
-                r_end,
-            )
-        for r_start, r_end in sheets_sync.rows_needing_r_clear(rows, start_row):
-            sheets_sync.clear_data_validation(
-                service, spreadsheet_id, sheet_id, raison_col_index, r_start, r_end
-            )
+        sheets_sync.copy_reference_formatting(
+            service,
+            spreadsheet_id,
+            sheet_id,
+            reference_sheet_id,
+            reference_row_r,
+            raison_col_index,
+            start_row,
+            end_row,
+        )
         sheets_sync.write_new_rows(service, spreadsheet_id, sheet_name, rows, headers, start_row)
         sheets_sync.extend_conditional_format_ranges(
             service, spreadsheet_id, sheet_id, new_end_row=end_row
