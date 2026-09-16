@@ -55,12 +55,14 @@ run `git-cliff -o CHANGELOG.md`.
 - Fall back to interactive re-auth when a refresh token is dead
 - *(ci)* Use npx git-cliff instead of the Docker-based action
 - *(extract)* Use row id instead of generic placeholder in Cle_dedup fallback
+- *(sheets-sync)* Apply column R dropdown to exact-match values, not just empty
 
 
 ### Refactor
 - Remove Statut column from offres pipeline
 - Extract domain routing into providers module
 - *(extract)* Split extract_eml.py into an extract/ package, add missing test coverage
+- *(extract)* Write literal Hors profil instead of blacklist category text
 
 
 ### Documentation
@@ -97,5 +99,8 @@ run `git-cliff -o CHANGELOG.md`.
 - *(changelog)* Homogenize changelog workflow
 - Standardize AI working notes folder to docs/work-in-progress
 - Add GitHub Actions workflow for lint and tests
+- *(sheets)* Remove redundant B+R conditional format rules
+- *(sheets)* Backfill missing Raison_exclusion for existing rows
+- *(sheets)* Fix legacy Cle_dedup placeholders and clear obsolete Doublon_ID
 
 
