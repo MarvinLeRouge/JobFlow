@@ -21,8 +21,6 @@ from sheets_sync import (
     read_import_rows,
     read_last_synced_id,
     row_values,
-    rows_needing_r_clear,
-    rows_needing_r_dropdown,
     rows_to_sync,
     run,
     write_error_state,
@@ -347,60 +345,6 @@ def test_copy_reference_formatting_targets_the_given_column():
     assert request["destination"]["endColumnIndex"] == 18
 
 
-def test_rows_needing_r_dropdown_includes_rows_with_empty_raison():
-    rows = [{"Raison_exclusion": ""}, {"Raison_exclusion": ""}]
-
-    assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 101)]
-
-
-def test_rows_needing_r_dropdown_excludes_rows_with_a_value():
-    rows = [{"Raison_exclusion": "Blacklisté: test"}, {"Raison_exclusion": "Blacklisté: test2"}]
-
-    assert rows_needing_r_dropdown(rows, start_row=100) == []
-
-
-def test_rows_needing_r_dropdown_splits_into_contiguous_ranges():
-    rows = [
-        {"Raison_exclusion": ""},
-        {"Raison_exclusion": "Blacklisté: x"},
-        {"Raison_exclusion": ""},
-        {"Raison_exclusion": ""},
-        {"Raison_exclusion": "Blacklisté: y"},
-    ]
-
-    assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 100), (102, 103)]
-
-
-def test_rows_needing_r_dropdown_handles_missing_key_as_empty():
-    rows = [{}]
-
-    assert rows_needing_r_dropdown(rows, start_row=100) == [(100, 100)]
-
-
-def test_rows_needing_r_clear_includes_rows_with_a_value():
-    rows = [{"Raison_exclusion": "Blacklisté: test"}, {"Raison_exclusion": "Blacklisté: test2"}]
-
-    assert rows_needing_r_clear(rows, start_row=100) == [(100, 101)]
-
-
-def test_rows_needing_r_clear_excludes_rows_with_empty_raison():
-    rows = [{"Raison_exclusion": ""}, {"Raison_exclusion": ""}]
-
-    assert rows_needing_r_clear(rows, start_row=100) == []
-
-
-def test_rows_needing_r_clear_splits_into_contiguous_ranges():
-    rows = [
-        {"Raison_exclusion": "Blacklisté: x"},
-        {"Raison_exclusion": ""},
-        {"Raison_exclusion": "Blacklisté: y"},
-        {"Raison_exclusion": "Blacklisté: z"},
-        {"Raison_exclusion": ""},
-    ]
-
-    assert rows_needing_r_clear(rows, start_row=100) == [(100, 100), (102, 103)]
-
-
 def test_clear_data_validation_builds_correct_request():
     service = MagicMock()
 
@@ -592,56 +536,18 @@ def test_run_copies_formatting_before_writing_values(tmp_path, monkeypatch):
     ]
 
 
-def test_run_applies_r_dropdown_only_to_rows_without_a_pre_filled_reason(tmp_path, monkeypatch):
-    """Row 1 has no Raison_exclusion (needs the dropdown); row 2 already has
-    one from extract_eml.py's blacklist detection (must keep its plain
-    value with no validation, or Sheets shows a 'not in list' warning)."""
+def test_run_applies_r_dropdown_to_the_whole_new_row_range(tmp_path, monkeypatch):
+    """Raison_exclusion is now always empty or an exact dropdown item
+    (extract_eml.py never writes freeform text) - column R's dropdown is
+    copied once over the whole new-row range, exactly like column B, with
+    no per-row filtering or explicit clearing needed."""
     _write_sync_config(tmp_path, monkeypatch)
     import_path = tmp_path / "import_20260101.csv"
     with import_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["ID", "Traite", "Raison_exclusion"], delimiter=";")
         writer.writeheader()
         writer.writerow({"ID": "E000002", "Traite": "FALSE", "Raison_exclusion": ""})
-        writer.writerow(
-            {"ID": "E000003", "Traite": "FALSE", "Raison_exclusion": "Blacklisté: test"}
-        )
-
-    fake_service = MagicMock()
-    values_get = fake_service.spreadsheets.return_value.values.return_value.get
-    values_get.return_value.execute.return_value = {"values": []}
-    fake_service.spreadsheets.return_value.get.return_value.execute.return_value = {
-        "sheets": [
-            {"properties": {"sheetId": 0, "title": "Offres"}},
-            {"properties": {"sheetId": 558063207, "title": "Références"}},
-        ]
-    }
-
-    with (
-        patch("sheets_sync.get_sheets_service", return_value=fake_service),
-        patch("sheets_sync.ensure_sheet_rows"),
-        patch("sheets_sync.copy_reference_formatting") as fake_copy_reference_formatting,
-    ):
-        run(dry_run=False, today="20260101")
-
-    r_calls = [call for call in fake_copy_reference_formatting.call_args_list if call.args[5] == 2]
-    assert len(r_calls) == 1
-    assert r_calls[0].args[6:] == (1, 1)
-
-
-def test_run_clears_r_validation_only_on_rows_with_a_pre_filled_reason(tmp_path, monkeypatch):
-    """Row 1 has no Raison_exclusion (gets the dropdown copy, no clear); row
-    2 already has one from extract_eml.py's blacklist detection (gets the
-    validation explicitly cleared, no dropdown copy) - newly appended rows
-    can otherwise inherit a stale dropdown from the row above them."""
-    _write_sync_config(tmp_path, monkeypatch)
-    import_path = tmp_path / "import_20260101.csv"
-    with import_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["ID", "Traite", "Raison_exclusion"], delimiter=";")
-        writer.writeheader()
-        writer.writerow({"ID": "E000002", "Traite": "FALSE", "Raison_exclusion": ""})
-        writer.writerow(
-            {"ID": "E000003", "Traite": "FALSE", "Raison_exclusion": "Blacklisté: test"}
-        )
+        writer.writerow({"ID": "E000003", "Traite": "FALSE", "Raison_exclusion": "Hors profil"})
 
     fake_service = MagicMock()
     values_get = fake_service.spreadsheets.return_value.values.return_value.get
@@ -661,16 +567,11 @@ def test_run_clears_r_validation_only_on_rows_with_a_pre_filled_reason(tmp_path,
     ):
         run(dry_run=False, today="20260101")
 
-    r_dropdown_calls = [
-        call for call in fake_copy_reference_formatting.call_args_list if call.args[5] == 2
-    ]
-    assert len(r_dropdown_calls) == 1
-    assert r_dropdown_calls[0].args[6:] == (1, 1)
+    r_calls = [call for call in fake_copy_reference_formatting.call_args_list if call.args[5] == 2]
+    assert len(r_calls) == 1
+    assert r_calls[0].args[6:] == (1, 2)
 
-    fake_clear_data_validation.assert_called_once()
-    clear_call = fake_clear_data_validation.call_args
-    assert clear_call.args[3] == 2
-    assert clear_call.args[4:] == (2, 2)
+    fake_clear_data_validation.assert_not_called()
 
 
 def test_extend_conditional_format_ranges_skips_header_rule():

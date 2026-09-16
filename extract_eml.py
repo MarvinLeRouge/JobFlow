@@ -29,7 +29,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from extract.filters import (
-    blacklist_category,
     build_cle_dedup,
     extract_stack,
     is_blacklisted,
@@ -134,7 +133,6 @@ def main(dry_run: bool, force_headers: bool | None = None):
     headers = config["offres_csv_headers"]
     keywords = config["stack_keywords"]
     blacklist = config.get("blacklist_titres", [])
-    blacklist_categories = config.get("blacklist_categories", {})
     stage_alternance_titres = config.get("stage_alternance_titres", [])
     hors_stack_tags = config.get("hors_stack_tags", [])
     ville_dept = {k.lower(): v for k, v in config["ville_dept"].items()}
@@ -316,7 +314,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
                 "URL_redirect": "",
                 "Stack": stack,
                 "Raison_exclusion": (
-                    f"Blacklisté: {blacklist_category(bl_term, blacklist_categories)}"
+                    "Hors profil"
                     if bl_term
                     else "Stage/Alternance"
                     if sa_term
