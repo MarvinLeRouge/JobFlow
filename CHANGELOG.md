@@ -106,5 +106,6 @@ run `git-cliff -o CHANGELOG.md`.
 - Add Codecov coverage upload
 - *(ci)* Bump codecov-action to v7
 - *(ci)* Add Codecov thresholds (informational)
+- *(ci)* Add ci-status aggregator job
 
 
