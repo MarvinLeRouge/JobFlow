@@ -56,6 +56,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(ci)* Use npx git-cliff instead of the Docker-based action
 - *(extract)* Use row id instead of generic placeholder in Cle_dedup fallback
 - *(sheets-sync)* Apply column R dropdown to exact-match values, not just empty
+- *(ci)* Trigger workflow on all pull requests, not just non-doc changes
 
 
 ### Refactor
