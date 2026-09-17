@@ -1,3 +1,7 @@
+# Informational for now — current coverage (~77%) is dragged down by untested
+# one-off scripts (extract_eml.py, rename_eml.py, backfill_*.py, etc.). Flip
+# both to `informational: false` once coverage clears 80%/90%, either by
+# testing those scripts or excluding them via `ignore:`.
 coverage:
   status:
     project:

@@ -374,6 +374,8 @@ ruff format --check .
 pre-commit install   # une seule fois, pour activer le hook git
 ```
 
+Objectifs de couverture (`codecov.yml`) : projet 80 % (±2 %), patch 90 % (±5 %) — **informatifs seulement** pour l'instant, non bloquants (quelques scripts ponctuels font baisser la couverture actuelle sous 80 % ; voir `codecov.yml` pour le plan de suite).
+
 ---
 
 ## Ajouter un provider
