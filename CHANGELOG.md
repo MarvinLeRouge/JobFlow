@@ -88,6 +88,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Add GitHub PR and issue templates
 - Add changelog automation via git-cliff
 - Relocate architecture doc under docs/
+- Document codecov coverage thresholds
 
 
 ### Miscellaneous Tasks
