@@ -102,5 +102,8 @@ run `git-cliff -o CHANGELOG.md`.
 - *(sheets)* Remove redundant B+R conditional format rules
 - *(sheets)* Backfill missing Raison_exclusion for existing rows
 - *(sheets)* Fix legacy Cle_dedup placeholders and clear obsolete Doublon_ID
+- Skip CI on doc-only changes
+- Add Codecov coverage upload
+- *(ci)* Bump codecov-action to v7
 
 
