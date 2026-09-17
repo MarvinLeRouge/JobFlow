@@ -105,5 +105,6 @@ run `git-cliff -o CHANGELOG.md`.
 - Skip CI on doc-only changes
 - Add Codecov coverage upload
 - *(ci)* Bump codecov-action to v7
+- *(ci)* Add Codecov thresholds (informational)
 
 
