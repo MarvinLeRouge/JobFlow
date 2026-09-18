@@ -10,12 +10,9 @@ on:
     branches: ["main"]
 
 jobs:
-  test:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - name: Checkout
@@ -35,6 +32,26 @@ jobs:
       - name: Format check (ruff)
         run: ruff format --check .
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
       - name: Test (pytest)
         run: pytest --cov=. --cov-report=xml
 
@@ -46,10 +63,29 @@ jobs:
           fail_ci_if_error: false
           use_oidc: true
 
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: pip-audit (dependency vulnerability scan)
+        run: pip-audit
+
   ci-status:
     name: CI status
     if: always()
-    needs: [test]
+    needs: [lint, test, security]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any required job failed or was cancelled
