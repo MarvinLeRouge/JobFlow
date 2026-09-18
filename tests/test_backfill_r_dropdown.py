@@ -1,10 +1,13 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+import backfill_r_dropdown as backfill
 from backfill_r_dropdown import (
     apply_dropdown_validation,
     fetch_dropdown_values,
+    main,
     read_raison_column,
     rows_needing_backfill,
+    run,
 )
 
 
@@ -132,3 +135,103 @@ def test_apply_dropdown_validation_bundles_every_range_into_one_batch_update():
             ]
         },
     )
+
+
+def _fake_service(valid_values, raison_values):
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {
+                "data": [
+                    {
+                        "rowData": [
+                            {
+                                "values": [
+                                    {
+                                        "dataValidation": {
+                                            "condition": {
+                                                "values": [
+                                                    {"userEnteredValue": v} for v in valid_values
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    values_get = service.spreadsheets.return_value.values.return_value.get
+    values_get.return_value.execute.return_value = {
+        "values": [[v] if v else [] for v in raison_values]
+    }
+    return service
+
+
+def _fake_config():
+    return {
+        "sheets_sync": {
+            "spreadsheet_id": "sheet-id",
+            "reference_sheet_name": "Références",
+            "reference_row_r": 3,
+        },
+        "offres_csv_headers": ["ID", "Titre", "Raison_exclusion"],
+    }
+
+
+def test_run_reports_nothing_to_fix_and_does_not_write(capsys):
+    fake_service = _fake_service(["Hors stack"], ["Blacklisté: test"])
+    with (
+        patch.object(backfill, "load_config", return_value=_fake_config()),
+        patch.object(backfill, "get_sheets_service", return_value=fake_service),
+        patch.object(backfill, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=False)
+
+    assert "Aucune ligne" in capsys.readouterr().out
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_dry_run_reports_fixes_without_writing(capsys):
+    fake_service = _fake_service(["Hors stack"], ["Hors stack"])
+    with (
+        patch.object(backfill, "load_config", return_value=_fake_config()),
+        patch.object(backfill, "get_sheets_service", return_value=fake_service),
+        patch.object(backfill, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=False)
+
+    out = capsys.readouterr().out
+    assert "1 ligne(s) sur 1 plage(s)" in out
+    assert "DRY-RUN" in out
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_applies_fixes_when_apply_is_true(capsys):
+    fake_service = _fake_service(["Hors stack"], ["Hors stack"])
+    with (
+        patch.object(backfill, "load_config", return_value=_fake_config()),
+        patch.object(backfill, "get_sheets_service", return_value=fake_service),
+        patch.object(backfill, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=True)
+
+    fake_service.spreadsheets.return_value.batchUpdate.assert_called_once()
+    assert "Validation appliquee" in capsys.readouterr().out
+
+
+def test_main_parses_sheet_name_and_defaults_apply_to_false():
+    with patch.object(backfill, "run") as fake_run:
+        main(["OffresTest"])
+
+    fake_run.assert_called_once_with("OffresTest", apply=False)
+
+
+def test_main_parses_the_apply_flag():
+    with patch.object(backfill, "run") as fake_run:
+        main(["OffresTest", "--apply"])
+
+    fake_run.assert_called_once_with("OffresTest", apply=True)
