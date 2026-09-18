@@ -1,16 +1,22 @@
+import base64
+import json
 import re
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+import fetch_gmail as fetch
 from fetch_gmail import (
     build_filename,
     build_query,
     collect_sender_domains,
     compute_after_date,
     determine_after_date,
+    download_raw_eml,
     list_message_ids,
+    load_patterns,
+    run,
     slugify_subject,
 )
 
@@ -123,3 +129,206 @@ def test_list_message_ids_no_results():
     messages_resource.list_next.return_value = None
 
     assert list_message_ids(service, "some query") == []
+
+
+def test_load_patterns_reads_and_parses_the_patterns_file(tmp_path, monkeypatch):
+    patterns_file = tmp_path / "scraping_patterns.json"
+    patterns_file.write_text(
+        json.dumps({"indeed_alerte": {"sender_domains": ["indeed.com"]}}), encoding="utf-8"
+    )
+    monkeypatch.setattr(fetch, "PATTERNS_FILE", patterns_file)
+
+    assert load_patterns() == {"indeed_alerte": {"sender_domains": ["indeed.com"]}}
+
+
+def test_download_raw_eml_decodes_the_base64_raw_payload():
+    service = MagicMock()
+    encoded = base64.urlsafe_b64encode(b"raw email content").decode("ascii")
+    service.users.return_value.messages.return_value.get.return_value.execute.return_value = {
+        "raw": encoded
+    }
+
+    result = download_raw_eml(service, "gmail-id-1")
+
+    assert result == b"raw email content"
+    service.users.return_value.messages.return_value.get.assert_called_once_with(
+        userId="me", id="gmail-id-1", format="raw"
+    )
+
+
+def _raw_eml(message_id="<abc@example.com>", from_addr="alerts@indeed.com", subject="Une offre"):
+    lines = []
+    if message_id is not None:
+        lines.append(f"Message-ID: {message_id}")
+    lines.append(f"From: {from_addr}")
+    lines.append(f"Subject: {subject}")
+    lines.append("Date: Fri, 18 Sep 2026 10:00:00 +0000")
+    lines.append("")
+    lines.append("body")
+    return "\r\n".join(lines).encode("utf-8")
+
+
+def _fake_service(gmail_id_to_raw: dict):
+    service = MagicMock()
+    messages_resource = service.users.return_value.messages.return_value
+
+    list_request = MagicMock()
+    list_request.execute.return_value = {"messages": [{"id": gid} for gid in gmail_id_to_raw]}
+    messages_resource.list.return_value = list_request
+    messages_resource.list_next.return_value = None
+
+    def fake_get(**kwargs):
+        request = MagicMock()
+        encoded = base64.urlsafe_b64encode(gmail_id_to_raw[kwargs["id"]]).decode("ascii")
+        request.execute.return_value = {"raw": encoded}
+        return request
+
+    messages_resource.get.side_effect = fake_get
+    return service
+
+
+PATTERNS = {"indeed_alerte": {"sender_domains": ["indeed.com"], "folder": "indeed"}}
+
+
+def test_run_writes_new_email_and_updates_the_ledger(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-1": _raw_eml()})
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value={}),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=False)
+
+    dest = tmp_path / "indeed" / "gmail-1-une-offre.eml"
+    assert dest.exists()
+    fake_save_ledger.assert_called_once()
+    saved_ledger = fake_save_ledger.call_args[0][1]
+    assert "<abc@example.com>" in saved_ledger
+    assert saved_ledger["<abc@example.com>"]["gmail_id"] == "gmail-1"
+    assert "1 email(s) téléchargé" in capsys.readouterr().out
+
+
+def test_run_dry_run_does_not_write_files_or_the_ledger(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-1": _raw_eml()})
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value={}),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=True)
+
+    assert not (tmp_path / "indeed").exists()
+    fake_save_ledger.assert_not_called()
+    assert "Simulation : 1 email(s) téléchargé" in capsys.readouterr().out
+
+
+def test_run_skips_a_message_with_no_message_id(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-1": _raw_eml(message_id=None)})
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value={}),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=False)
+
+    assert "SKIP (Message-ID introuvable)" in capsys.readouterr().out
+    fake_save_ledger.assert_called_once()
+    assert fake_save_ledger.call_args[0][1] == {}
+
+
+def test_run_skips_a_message_already_known_under_another_gmail_id(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-2": _raw_eml(message_id="<abc@example.com>")})
+    existing_ledger = {
+        "<abc@example.com>": {
+            "gmail_id": "gmail-1",
+            "fichier": "indeed/gmail-1-une-offre.eml",
+            "date_email": "",
+            "fetched_at": "2026-09-01T00:00:00Z",
+            "indexed_at": "",
+            "statut_extraction": "PENDING",
+        }
+    }
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value=existing_ledger),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=False)
+
+    assert "SKIP (déjà connu sous un autre gmail_id)" in capsys.readouterr().out
+    fake_save_ledger.assert_called_once()
+    assert fake_save_ledger.call_args[0][1] == existing_ledger
+
+
+def test_run_skips_a_message_from_an_unknown_domain(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-1": _raw_eml(from_addr="someone@unknown-domain.example")})
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value={}),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=False)
+
+    assert "SKIP (domaine inconnu: unknown-domain.example)" in capsys.readouterr().out
+    fake_save_ledger.assert_called_once()
+    assert fake_save_ledger.call_args[0][1] == {}
+
+
+def test_run_skips_gmail_ids_already_present_in_the_ledger(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(fetch, "SOURCES_DIR", tmp_path)
+    fake_service = _fake_service({"gmail-1": _raw_eml()})
+    existing_ledger = {
+        "<other@example.com>": {
+            "gmail_id": "gmail-1",
+            "fichier": "indeed/gmail-1-other.eml",
+            "date_email": "",
+            "fetched_at": "2026-09-01T00:00:00Z",
+            "indexed_at": "",
+            "statut_extraction": "PENDING",
+        }
+    }
+
+    with (
+        patch.object(fetch, "load_patterns", return_value=PATTERNS),
+        patch.object(fetch, "load_domain_map", return_value={"indeed.com": "indeed"}),
+        patch.object(fetch, "load_ledger", return_value=existing_ledger),
+        patch.object(fetch, "determine_after_date", return_value="2026/09/01"),
+        patch.object(fetch.auth, "get_credentials", return_value=object()),
+        patch.object(fetch, "build", return_value=fake_service),
+        patch.object(fetch, "save_ledger") as fake_save_ledger,
+    ):
+        run(dry_run=False)
+
+    assert "1 message(s) trouvé(s), 0 nouveau(x)" in capsys.readouterr().out
+    fake_save_ledger.assert_called_once()
+    assert fake_save_ledger.call_args[0][1] == existing_ledger
