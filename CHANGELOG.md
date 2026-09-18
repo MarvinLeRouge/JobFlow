@@ -117,5 +117,6 @@ run `git-cliff -o CHANGELOG.md`.
 - *(ci)* Bump codecov-action to v7
 - *(ci)* Add Codecov thresholds (informational)
 - *(ci)* Add ci-status aggregator job
+- Homogenize CI job naming and add security job
 
 
