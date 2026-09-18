@@ -94,6 +94,10 @@ run `git-cliff -o CHANGELOG.md`.
 
 ### Testing
 - *(backfill)* Cover run and main entry points of one-shot migration scripts
+- *(extract,inspect)* Cover detect_provider domain matching and inspect_sheet_formatting
+- *(scripts)* Cover run and main of remaining one-shot maintenance scripts
+- *(extract)* Cover geo dept resolution and io file-writing helpers
+- *(core)* Cover fetch_gmail, rename_eml, and extract_eml orchestration
 
 
 ### Miscellaneous Tasks
