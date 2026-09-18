@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.coverage
 token.json
 credentials.json
 token_*.json
