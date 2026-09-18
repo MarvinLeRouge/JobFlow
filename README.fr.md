@@ -8,8 +8,9 @@
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-185%20passants-brightgreen)
-![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)
+[![codecov](https://codecov.io/gh/MarvinLeRouge/JobFlow/graph/badge.svg)](https://codecov.io/gh/MarvinLeRouge/JobFlow)
+![Tests](https://img.shields.io/badge/Tests-352%20passants-brightgreen)
+[![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)](LICENSE)
 
 ---
 
