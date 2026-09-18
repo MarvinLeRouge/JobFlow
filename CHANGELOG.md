@@ -90,6 +90,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Add changelog automation via git-cliff
 - Relocate architecture doc under docs/
 - Document codecov coverage thresholds
+- *(readme)* Correct test count, add codecov badge and fix license link
 
 
 ### Testing
