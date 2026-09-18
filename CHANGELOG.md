@@ -119,5 +119,6 @@ run `git-cliff -o CHANGELOG.md`.
 - *(ci)* Add Codecov thresholds (informational)
 - *(ci)* Add ci-status aggregator job
 - Homogenize CI job naming and add security job
+- Ignore coverage artifact and pin local python version
 
 
