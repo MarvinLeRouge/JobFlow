@@ -1,4 +1,12 @@
-from consolidate_conditional_format_rules import build_requests, find_b_and_r_only_rules
+from unittest.mock import MagicMock, patch
+
+import consolidate_conditional_format_rules as consolidate
+from consolidate_conditional_format_rules import (
+    build_requests,
+    find_b_and_r_only_rules,
+    main,
+    run,
+)
 
 
 def _rule(ranges: list[tuple[int, int, int, int]]) -> dict:
@@ -59,3 +67,70 @@ def test_build_requests_deletes_every_matched_index_in_descending_order():
         {"deleteConditionalFormatRule": {"sheetId": 42, "index": 5}},
         {"deleteConditionalFormatRule": {"sheetId": 42, "index": 2}},
     ]
+
+
+def _fake_service(sheet_id, conditional_formats):
+    service = MagicMock()
+    service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"sheetId": sheet_id}, "conditionalFormats": conditional_formats}]
+    }
+    return service
+
+
+def _fake_config():
+    return {"sheets_sync": {"spreadsheet_id": "sheet-id"}}
+
+
+def test_run_reports_nothing_to_fix_and_does_not_write(capsys):
+    fake_service = _fake_service(0, [_rule([(1, 8157, 0, 26)])])
+    with (
+        patch.object(consolidate, "load_config", return_value=_fake_config()),
+        patch.object(consolidate, "get_sheets_service", return_value=fake_service),
+        patch.object(consolidate, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=False)
+
+    assert "Aucune regle" in capsys.readouterr().out
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_dry_run_reports_fixes_without_writing(capsys):
+    fake_service = _fake_service(0, [_rule([(99, 200, 1, 2), (99, 200, 17, 18)])])
+    with (
+        patch.object(consolidate, "load_config", return_value=_fake_config()),
+        patch.object(consolidate, "get_sheets_service", return_value=fake_service),
+        patch.object(consolidate, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=False)
+
+    out = capsys.readouterr().out
+    assert "1 regle(s)" in out
+    assert "DRY-RUN" in out
+    fake_service.spreadsheets.return_value.batchUpdate.assert_not_called()
+
+
+def test_run_applies_fixes_when_apply_is_true(capsys):
+    fake_service = _fake_service(0, [_rule([(99, 200, 1, 2), (99, 200, 17, 18)])])
+    with (
+        patch.object(consolidate, "load_config", return_value=_fake_config()),
+        patch.object(consolidate, "get_sheets_service", return_value=fake_service),
+        patch.object(consolidate, "get_sheet_id", return_value=0),
+    ):
+        run("OffresTest", apply=True)
+
+    fake_service.spreadsheets.return_value.batchUpdate.assert_called_once()
+    assert "supprimee(s)" in capsys.readouterr().out
+
+
+def test_main_parses_sheet_name_and_defaults_apply_to_false():
+    with patch.object(consolidate, "run") as fake_run:
+        main(["OffresTest"])
+
+    fake_run.assert_called_once_with("OffresTest", apply=False)
+
+
+def test_main_parses_the_apply_flag():
+    with patch.object(consolidate, "run") as fake_run:
+        main(["OffresTest", "--apply"])
+
+    fake_run.assert_called_once_with("OffresTest", apply=True)
