@@ -92,6 +92,10 @@ run `git-cliff -o CHANGELOG.md`.
 - Document codecov coverage thresholds
 
 
+### Testing
+- *(backfill)* Cover run and main entry points of one-shot migration scripts
+
+
 ### Miscellaneous Tasks
 - Add pytest/ruff/pre-commit tooling
 - Apply Message_ID migration to config.json
