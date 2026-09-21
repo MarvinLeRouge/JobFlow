@@ -426,6 +426,15 @@ def run(dry_run: bool, today: str | None = None) -> None:
         write_new_rows(service, spreadsheet_id, sheet_name, new_rows, headers, start_row)
         extend_conditional_format_ranges(service, spreadsheet_id, sheet_id, new_end_row=end_row)
 
+        from consolidate_conditional_format_rules import consolidate
+
+        consolidated = consolidate(service, spreadsheet_id, sheet_id)
+        if consolidated:
+            print(
+                f"{len(consolidated)} regle(s) de mise en forme conditionnelle B+R "
+                f"redondante(s) supprimee(s) automatiquement : {consolidated}"
+            )
+
         print(
             f"{len(new_rows)} offre(s) synchronisee(s) dans {sheet_name} "
             f"(lignes {start_row}-{end_row})"

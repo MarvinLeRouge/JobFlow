@@ -574,6 +574,45 @@ def test_run_applies_r_dropdown_to_the_whole_new_row_range(tmp_path, monkeypatch
     fake_clear_data_validation.assert_not_called()
 
 
+def test_run_consolidates_b_and_r_redundant_rules_after_extending_ranges(tmp_path, monkeypatch):
+    """A copy-paste on the sheet between two sync runs can leave a B+R-only
+    conditional format artifact that extend_conditional_format_ranges would
+    otherwise keep growing on every subsequent sync - clean it up
+    automatically right after, instead of relying on a human noticing."""
+    _write_sync_config(tmp_path, monkeypatch)
+    import_path = tmp_path / "import_20260101.csv"
+    with import_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["ID", "Traite", "Raison_exclusion"], delimiter=";")
+        writer.writeheader()
+        writer.writerow({"ID": "E000002", "Traite": "FALSE", "Raison_exclusion": ""})
+
+    fake_service = MagicMock()
+    values_get = fake_service.spreadsheets.return_value.values.return_value.get
+    values_get.return_value.execute.return_value = {"values": []}
+    fake_service.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Offres"}},
+            {"properties": {"sheetId": 558063207, "title": "Références"}},
+        ]
+    }
+
+    with (
+        patch("sheets_sync.get_sheets_service", return_value=fake_service),
+        patch("sheets_sync.ensure_sheet_rows"),
+        patch("sheets_sync.copy_reference_formatting"),
+        patch("sheets_sync.extend_conditional_format_ranges") as fake_extend,
+        patch(
+            "consolidate_conditional_format_rules.consolidate", return_value=[3]
+        ) as fake_consolidate,
+    ):
+        run(dry_run=False, today="20260101")
+
+    fake_consolidate.assert_called_once()
+    assert fake_consolidate.call_args.args[0] == fake_service
+    assert fake_consolidate.call_args.args[2] == 0
+    assert fake_extend.call_args.args[0] == fake_service
+
+
 def test_extend_conditional_format_ranges_skips_header_rule():
     service = MagicMock()
     service.spreadsheets.return_value.get.return_value.execute.return_value = {

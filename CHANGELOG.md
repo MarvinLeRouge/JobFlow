@@ -39,6 +39,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(extract)* Simplify blacklist reason to a category in Raison_exclusion
 - *(extract)* Flag stage/alternance titles directly into Raison_exclusion
 - *(extract)* Flag C++/C#/.Net/Java offers directly into Raison_exclusion
+- *(sheets)* Auto-consolidate redundant B+R conditional format rules after sync
 
 
 ### Bug Fixes

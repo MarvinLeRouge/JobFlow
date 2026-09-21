@@ -144,6 +144,15 @@ def run(dry_run: bool) -> None:
             f"ligne {separator_row} laissee vide en separateur)"
         )
 
+    from consolidate_conditional_format_rules import consolidate
+
+    consolidated = consolidate(service, spreadsheet_id, sheet_id)
+    if consolidated:
+        print(
+            f"{len(consolidated)} regle(s) de mise en forme conditionnelle B+R "
+            f"redondante(s) supprimee(s) automatiquement : {consolidated}"
+        )
+
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(

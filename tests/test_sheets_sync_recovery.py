@@ -170,7 +170,10 @@ def test_run_writes_gap_rows_after_a_blank_separator_row(tmp_path, monkeypatch):
     monkeypatch.setattr("sheets_sync_recovery.OFFRES_CSV", tmp_path / "offres.csv")
 
     fake_service = _fake_service_with_sheet_ids(sheet_ids={1, 2, 3}, last_data_row=4)
-    with patch("sheets_sync.get_sheets_service", return_value=fake_service):
+    with (
+        patch("sheets_sync.get_sheets_service", return_value=fake_service),
+        patch("consolidate_conditional_format_rules.consolidate", return_value=[]),
+    ):
         run(dry_run=False)
 
     update_call = fake_service.spreadsheets.return_value.values.return_value.update
@@ -178,3 +181,25 @@ def test_run_writes_gap_rows_after_a_blank_separator_row(tmp_path, monkeypatch):
     assert kwargs["range"] == "Offres!A6:D7"
     assert kwargs["body"]["values"][0][0] == "E000004"
     assert kwargs["body"]["values"][1][0] == "E000005"
+
+
+def test_run_consolidates_b_and_r_redundant_rules_once_after_all_gaps_written(
+    tmp_path, monkeypatch, capsys
+):
+    _write_sync_config(tmp_path, monkeypatch)
+    _write_offres_full_csv(tmp_path / "offres.csv", count=5)
+    monkeypatch.setattr("sheets_sync_recovery.OFFRES_CSV", tmp_path / "offres.csv")
+
+    fake_service = _fake_service_with_sheet_ids(sheet_ids={1, 2, 3}, last_data_row=4)
+    with (
+        patch("sheets_sync.get_sheets_service", return_value=fake_service),
+        patch(
+            "consolidate_conditional_format_rules.consolidate", return_value=[3]
+        ) as fake_consolidate,
+    ):
+        run(dry_run=False)
+
+    fake_consolidate.assert_called_once()
+    assert fake_consolidate.call_args.args[0] == fake_service
+    assert fake_consolidate.call_args.args[2] == 0
+    assert "regle(s)" in capsys.readouterr().out
