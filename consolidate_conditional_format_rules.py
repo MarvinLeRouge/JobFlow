@@ -40,6 +40,34 @@ def build_requests(sheet_id: int, indices: list[int]) -> list[dict]:
     ]
 
 
+def fetch_rules(service, spreadsheet_id: str, sheet_id: int) -> list[dict]:
+    meta = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties.sheetId,conditionalFormats)")
+        .execute()
+    )
+    sheet = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == sheet_id)
+    return sheet.get("conditionalFormats", [])
+
+
+def consolidate(service, spreadsheet_id: str, sheet_id: int) -> list[int]:
+    """Delete every B+R-only redundant rule on the given sheet and return
+    the indices that were deleted (empty if none) - the reusable building
+    block behind both the standalone CLI's --apply and the automatic call
+    made right after a sync run, so a copy-paste artifact never survives
+    past the sync that follows it."""
+    rules = fetch_rules(service, spreadsheet_id, sheet_id)
+    indices = find_b_and_r_only_rules(rules)
+    if not indices:
+        return []
+
+    requests = build_requests(sheet_id, indices)
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id, body={"requests": requests}
+    ).execute()
+    return indices
+
+
 def run(sheet_name: str, apply: bool) -> None:
     config = load_config()
     spreadsheet_id = config["sheets_sync"]["spreadsheet_id"]
@@ -47,14 +75,7 @@ def run(sheet_name: str, apply: bool) -> None:
     service = get_sheets_service()
     sheet_id = get_sheet_id(service, spreadsheet_id, sheet_name)
 
-    meta = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties.sheetId,conditionalFormats)")
-        .execute()
-    )
-    sheet = next(s for s in meta["sheets"] if s["properties"]["sheetId"] == sheet_id)
-    rules = sheet.get("conditionalFormats", [])
-
+    rules = fetch_rules(service, spreadsheet_id, sheet_id)
     indices = find_b_and_r_only_rules(rules)
     if not indices:
         print(f"Aucune regle B+R redondante dans {sheet_name!r}.")
