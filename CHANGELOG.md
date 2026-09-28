@@ -125,3 +125,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Update ETL filtering blacklist
 
 
+### Chore
+- Talent.com footer update
+
+

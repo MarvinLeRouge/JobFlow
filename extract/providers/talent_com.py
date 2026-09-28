@@ -30,6 +30,10 @@ TALENT_COM_FOOTER_TITLES = {
     "datenschutzerklärung",
     "cookie-richtlinie",
     "kontakt",
+    "warunki świadczenia usług",
+    "polityka prywatności",
+    "polityka plików cookie",
+    "skontaktuj się z nami",
 }
 
 # Lien de redirection propre à une offre, imbriqué dans l'attribut href
