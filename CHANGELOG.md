@@ -123,6 +123,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Ignore coverage artifact and pin local python version
 - Add local post-commit hook for changelog generation
 - Update ETL filtering blacklist
+- Blacklist update
 
 
 ### Chore

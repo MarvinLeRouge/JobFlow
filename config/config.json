@@ -195,13 +195,17 @@
     "commercial immobilier",
     "indépendant immobilier",
     "néggociateur immobilier",
-    "négociateur immobilier"
+    "négociateur immobilier",
+    "comptable",
+    "comptabilité",
+    "comptabilite"
   ],
   "stage_alternance_titres": [
     "alternance",
     "alternant",
     "stage",
-    "stagiaire"
+    "stagiaire",
+    "apprentissage"
   ],
   "hors_stack_tags": [
     "C++",
