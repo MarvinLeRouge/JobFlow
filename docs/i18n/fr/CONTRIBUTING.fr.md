@@ -1,4 +1,4 @@
-🇫🇷 Version française | [🇬🇧 English version](CONTRIBUTING.md)
+🇫🇷 Version française | [🇬🇧 English version](../../../CONTRIBUTING.md)
 
 ---
 
@@ -9,7 +9,7 @@ Ceci est un projet personnel, mais les contributions externes (signalement de bu
 ## Prérequis
 
 - Python 3.13
-- Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.fr.md](docs/setup_gmail_auth.fr.md)). Non nécessaire pour lancer la suite de tests.
+- Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.fr.md](../../setup_gmail_auth.fr.md)). Non nécessaire pour lancer la suite de tests.
 
 ## Installation locale
 
@@ -34,7 +34,7 @@ Les trois doivent passer avant d'ouvrir une pull request.
 ## Workflow
 
 1. Forker le dépôt et créer une branche à partir de `main`.
-2. Faire la modification, avec des tests la couvrant (voir la section [Tests](README.fr.md#tests) du README).
+2. Faire la modification, avec des tests la couvrant (voir la section [Tests](../../../README.fr.md#tests) du README).
 3. Committer en suivant la convention ci-dessous.
 4. Pousser et ouvrir une pull request contre `main`.
 5. La CI doit passer avant relecture.
@@ -75,4 +75,4 @@ Ce projet suit un [Code de conduite](CODE_OF_CONDUCT.fr.md). En y participant, v
 
 ## Licence
 
-En contribuant, vous acceptez que vos contributions soient placées sous la [licence MIT](LICENSE) du projet.
+En contribuant, vous acceptez que vos contributions soient placées sous la [licence MIT](../../../LICENSE) du projet.
