@@ -125,6 +125,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Add local post-commit hook for changelog generation
 - Update ETL filtering blacklist
 - Blacklist update
+- Update filtering blacklist
 
 
 ### Chore
