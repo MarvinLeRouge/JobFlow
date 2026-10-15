@@ -4,7 +4,7 @@
 
 # 🎯 JobFlow
 
-> *Un pipeline Python qui transforme des alertes emploi dispersées en un Google Sheet unique, dédoublonné, filtré et toujours à jour — du fetch Gmail à la feuille de suivi synchronisée.*
+> *Pipeline de données Python qui transforme les alertes emploi de plusieurs plateformes en un Google Sheet unique, dédoublonné et toujours à jour : ingestion via l'API Gmail, parsing par plateforme, dédoublonnage inter-sources et garde-fou d'erreur protégeant la feuille de production.*
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)

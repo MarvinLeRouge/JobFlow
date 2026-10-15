@@ -4,7 +4,7 @@
 
 # 🎯 JobFlow
 
-> *A Python pipeline that turns scattered job alert emails into a deduplicated, filtered, always-current Google Sheet — from Gmail fetch to synced tracking sheet.*
+> *Python data pipeline that turns job alert emails from several providers into a single deduplicated, always-current Google Sheet: Gmail API ingestion, per-provider parsing, cross-source deduplication, and an error gate protecting the production sheet.*
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
