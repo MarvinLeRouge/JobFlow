@@ -241,6 +241,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
             "linkedin": "LinkedIn",
             "meteojob_company": "Meteojob",
             "jobijoba_alerte": "Jobijoba",
+            "jobleads": "JobLeads",
             "talent_com": "Talent.com",
         }.get(provider_key, provider_key)
 

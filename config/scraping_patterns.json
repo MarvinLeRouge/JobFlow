@@ -153,6 +153,21 @@
     "notes": "Email de type newsletter sectorielle — pas d'offres individuelles. À ignorer."
   },
 
+  "jobleads": {
+    "description": "JobLeads : offre unique du jour ou alerte multi-offres (recherche sauvegardée). Les e-mails marketing/techniques du même domaine (confirmation, relances talent manager) n'ont pas de bloc offre et produisent naturellement 0 résultat.",
+    "folder": "jobleads",
+    "sender_domains": ["jobleads.com"],
+    "sender_pattern": "mailer@jobleads.com",
+    "subject_hint": "meilleure offre d.emploi du jour|nouvelles offres d.emploi|ce poste =",
+    "offers_per_email": "0-5",
+    "id_field": "job_id",
+    "id_pattern": "(?:--|/job/)([a-f0-9]{20,40})(?:\\?|$)",
+    "url_template": "https://www.jobleads.com/job/{id}",
+    "url_qualite": "construite",
+    "extractable": ["titre", "entreprise", "ville", "contrat", "salaire"],
+    "notes": "Deux gabarits HTML pour les offres, repérés par un même marqueur de titre (color:#100F0E, font-size:20px) quel que soit le gabarit : offre unique (lien englobant toute la carte) et alerte multi-offres (lien CTA après le contenu, ordre contrat/salaire inversé). Le mode de travail (Sur place/Hybride/Télétravail) est stocké dans Notes, faute de colonne dédiée."
+  },
+
   "hellowork": {
     "description": "Alertes HelloWork / emails de sociétés via HelloWork",
     "folder": "hellowork",
