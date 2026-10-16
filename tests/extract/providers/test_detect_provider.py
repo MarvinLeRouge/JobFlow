@@ -5,6 +5,7 @@ PATTERNS = {
     "indeed_alerte": {"sender_domains": ["jobalert.indeed.com", "indeed.com"]},
     "indeed_match": {"sender_domains": ["match.indeed.com"]},
     "linkedin": {"sender_domains": ["linkedin.com"]},
+    "jobleads": {"sender_domains": ["jobleads.com"]},
 }
 
 
@@ -38,3 +39,10 @@ def test_detect_provider_returns_none_none_when_nothing_matches():
     key, config = detect_provider("unknown.example.com", PATTERNS)
 
     assert (key, config) == (None, None)
+
+
+def test_detect_provider_matches_a_jobleads_subdomain_via_the_root_domain():
+    key, config = detect_provider("email.jobleads.com", PATTERNS)
+
+    assert key == "jobleads"
+    assert config is PATTERNS["jobleads"]

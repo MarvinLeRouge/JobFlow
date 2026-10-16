@@ -23,6 +23,7 @@ from extract.providers.france_travail import extract_france_travail  # noqa: E40
 from extract.providers.indeed_alerte import extract_indeed_alerte  # noqa: E402
 from extract.providers.indeed_match import extract_indeed_match  # noqa: E402
 from extract.providers.jobijoba import extract_jobijoba  # noqa: E402
+from extract.providers.jobleads import extract_jobleads  # noqa: E402
 from extract.providers.linkedin import extract_linkedin  # noqa: E402
 from extract.providers.meteojob import extract_meteojob_company  # noqa: E402
 from extract.providers.talent_com import extract_talent_com  # noqa: E402
@@ -58,6 +59,7 @@ EXTRACTORS = {
     "meteojob_digest": None,  # skip
     "jobijoba_alerte": extract_jobijoba,
     "jobijoba_digest": None,  # skip
+    "jobleads": extract_jobleads,
     "talent_com": extract_talent_com,
     "hellowork": None,  # patterns à définir
 }
