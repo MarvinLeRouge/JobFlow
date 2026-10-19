@@ -9,7 +9,7 @@
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 [![codecov](https://codecov.io/gh/MarvinLeRouge/JobFlow/graph/badge.svg)](https://codecov.io/gh/MarvinLeRouge/JobFlow)
-![Tests](https://img.shields.io/badge/Tests-352%20passants-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-360%20passants-brightgreen)
 [![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)](LICENSE)
 
 ---
@@ -375,7 +375,7 @@ ruff format --check .
 pre-commit install   # une seule fois, pour activer le hook git
 ```
 
-Objectifs de couverture (`codecov.yml`) : projet 80 % (±2 %), patch 90 % (±5 %) — **informatifs seulement** pour l'instant, non bloquants (quelques scripts ponctuels font baisser la couverture actuelle sous 80 % ; voir `codecov.yml` pour le plan de suite).
+Objectifs de couverture (`codecov.yml`) : projet 80 % (±2 %), patch 90 % (±5 %), réglés en **informatifs seulement** - un run en dessous de l'objectif ne bloque ni la CI ni la fusion d'une PR (voir le badge ci-dessus pour le pourcentage actuel).
 
 ---
 
@@ -413,7 +413,7 @@ Projet personnel à double objectif :
 | Fetch email | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sync feuille | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Géocodage fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
-| Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 185 tests |
+| Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) |
 | Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
 | Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
