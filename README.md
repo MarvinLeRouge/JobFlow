@@ -9,7 +9,7 @@
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 [![codecov](https://codecov.io/gh/MarvinLeRouge/JobFlow/graph/badge.svg)](https://codecov.io/gh/MarvinLeRouge/JobFlow)
-![Tests](https://img.shields.io/badge/Tests-352%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-360%20passing-brightgreen)
 [![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)](LICENSE)
 
 ---
@@ -374,7 +374,7 @@ ruff format --check .
 pre-commit install   # once, to enable the git hook
 ```
 
-Coverage targets (`codecov.yml`): project 80% (±2%), patch 90% (±5%) — currently **informational only**, not blocking (some one-off scripts drag current coverage below 80%; see `codecov.yml` for the follow-up plan).
+Coverage targets (`codecov.yml`): project 80% (±2%), patch 90% (±5%), set to **informational only** - a run below target does not block CI or a PR merge (see the badge above for the current percentage).
 
 ---
 
@@ -412,7 +412,7 @@ Personal project with a dual purpose:
 | Email fetch | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sheet sync | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Geocoding fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
-| Testing | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) — 185 tests |
+| Testing | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) |
 | Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
 | Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 

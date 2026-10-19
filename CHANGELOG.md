@@ -95,6 +95,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(readme)* Correct test count, add codecov badge and fix license link
 - *(root)* Move French community-health docs into docs/i18n/fr
 - Align readme tagline with repository description
+- Align README test count and coverage paragraph
 
 
 ### Testing
