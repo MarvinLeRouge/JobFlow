@@ -59,6 +59,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(extract)* Use row id instead of generic placeholder in Cle_dedup fallback
 - *(sheets-sync)* Apply column R dropdown to exact-match values, not just empty
 - *(ci)* Trigger workflow on all pull requests, not just non-doc changes
+- *(extract)* Bound JobLeads card URL search by neighboring title, not a fixed window
 
 
 ### Refactor
@@ -129,6 +130,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Update ETL filtering blacklist
 - Blacklist update
 - Update filtering blacklist
+- *(extract)* Add a read-only report for JobLeads offers with a missing URL
 
 
 ### Chore
