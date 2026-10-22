@@ -130,6 +130,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Update ETL filtering blacklist
 - Blacklist update
 - Update filtering blacklist
+- *(extract)* Add a read-only report for JobLeads offers with a missing URL
 
 
 ### Chore
