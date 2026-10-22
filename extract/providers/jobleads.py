@@ -42,7 +42,10 @@ JOBLEADS_CONTRACT_RE = re.compile("|".join(re.escape(c) for c in JOBLEADS_CONTRA
 # séparé par un tiret pour une fourchette.
 JOBLEADS_SALARY_RE = re.compile(r"(?:EUR|USD|\$|€)\s*([\d\s ]{3,}?)(?:\s*-\s*([\d\s ]{3,}))?\s*$")
 
-CARD_WINDOW = 2000  # fenêtre de recherche après le titre, large mais bornée
+# Fenêtre pour les lignes utiles (entreprise/lieu/contrat-salaire) après le
+# titre : celles-ci apparaissent toujours tôt dans la carte, pas besoin
+# d'aller plus loin même pour la dernière carte d'un e-mail.
+LINES_WINDOW = 2000
 
 
 def _digits(s: str) -> str:
@@ -58,8 +61,16 @@ def extract_jobleads(html: str, msg, patterns: dict) -> list[dict]:
         if not titre:
             continue
 
-        block_end = titles[i + 1].start() if i + 1 < len(titles) else title_m.end() + CARD_WINDOW
-        block_before = html[max(0, title_m.start() - 1200) : title_m.start()]
+        # Bornes exactes par le titre voisin plutôt qu'une fenêtre fixe en
+        # caractères : une "Benefits Highlight Row" (A/B test, cf. commentaire
+        # HTML réel) peut repousser le lien CTA très loin après le titre, et
+        # le lien englobant du gabarit "offre unique" peut s'ouvrir très loin
+        # avant - une fenêtre fixe a déjà raté l'URL des deux côtés en
+        # production (voir tests de régression). Borner par le titre voisin
+        # élimine aussi le risque de récupérer l'URL d'une carte adjacente.
+        block_end = titles[i + 1].start() if i + 1 < len(titles) else len(html)
+        block_start = titles[i - 1].end() if i > 0 else 0
+        block_before = html[block_start : title_m.start()]
         block_after = html[title_m.end() : block_end]
 
         o = offer_base()
@@ -77,7 +88,8 @@ def extract_jobleads(html: str, msg, patterns: dict) -> list[dict]:
                 o["url_qualite"] = "email"
 
         lines = [
-            clean_entities(line).strip() for line in JOBLEADS_LINE_RE.findall(block_after[:2000])
+            clean_entities(line).strip()
+            for line in JOBLEADS_LINE_RE.findall(block_after[:LINES_WINDOW])
         ]
         lines = [line for line in lines if line]
 

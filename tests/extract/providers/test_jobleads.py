@@ -66,6 +66,52 @@ HTML_DIGEST = HTML_DIGEST_CARD.format(
     job_id="eb84384e47313314bfaa04b016eff2cb1",
 )
 
+# Régression : la "Benefits Highlight Row" (présente pour certains
+# destinataires, cf. commentaire HTML réel "A/B test treatment only") pousse
+# le lien CTA de la DERNIÈRE carte très loin après son titre - rien ne la
+# borne par un titre suivant, contrairement aux cartes précédentes.
+LAST_CARD_JOB_URL = (
+    "https://www.jobleads.com/fr/job/cloud-automation-platform-engineer-aws-devsecops"
+    "-h-f--la-ciotat--e7b522d99d10b4b8aa7ee8f5df07b9485"
+)
+HTML_DIGEST_LAST_CARD_WITH_BENEFITS_ROW = (
+    HTML_DIGEST_CARD.format(
+        titre="Développeur Back-End PHP H/F (F/H)",
+        entreprise="Synanto",
+        lieu="Marseille",
+        mode="Sur place",
+        sal_min=55,
+        sal_max=75,
+        contrat="Plein temps",
+        job_id="e4d8fe5c8274fd4f47421fd46f59fe716",
+    )
+    + """
+<!-- Top section: Title, Company, Location/Chips -->
+<div style="color: #100F0E; font-size: 20px; font-weight: 600;">
+  Cloud Automation & Platform Engineer (AWS / DevSecOps) (H/F)
+</div>
+<div style="color: #272625; font-size: 16px;">
+  DIGWAY
+</div>
+<div style="color: #484745; font-size: 16px;">•</div>
+<div style="color: #484745; font-size: 16px;">
+  La Ciotat | Hybride
+</div>
+<div style="color: #484745; font-size: 16px;">•</div>
+<div style="color: #484745; font-size: 16px;">
+  EUR 60 000 - 90 000 | Plein temps
+</div>
+<!-- Benefits Highlight Row (A/B test treatment only) -->
+<table><tr><td>"""
+    + ("<div>Avantage offre A/B test rempli de texte de remplissage. </div>" * 60)
+    + '</td></tr></table>\n<!-- CTA Link -->\n<a href="'
+    + LAST_CARD_JOB_URL
+    + """?kuuid=abc" style="color: #B43332;">
+  Afficher l’offre d’emploi
+</a>
+"""
+)
+
 HTML_MARKETING = """
 <p>Jean, de nouveaux postes qui valent votre temps.</p>
 <a href="https://www.jobleads.com/home?kuuid=abc">Se connecter</a>
@@ -113,3 +159,13 @@ def test_extracts_every_card_from_a_multi_offer_digest_with_salary_before_contra
 
 def test_returns_empty_list_for_a_marketing_email_with_no_offer_card(make_msg):
     assert extract_jobleads(HTML_MARKETING, make_msg(), {}) == []
+
+
+def test_finds_the_url_of_the_last_card_even_past_a_long_benefits_row(make_msg):
+    offers = extract_jobleads(HTML_DIGEST_LAST_CARD_WITH_BENEFITS_ROW, make_msg(), {})
+
+    assert len(offers) == 2
+    last = offers[1]
+    assert last["titre"] == "Cloud Automation & Platform Engineer (AWS / DevSecOps) (H/F)"
+    assert last["url"] == "https://www.jobleads.com/job/e7b522d99d10b4b8aa7ee8f5df07b9485"
+    assert last["url_qualite"] == "construite"
