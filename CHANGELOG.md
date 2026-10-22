@@ -41,6 +41,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(extract)* Flag C++/C#/.Net/Java offers directly into Raison_exclusion
 - *(sheets)* Auto-consolidate redundant B+R conditional format rules after sync
 - *(extract)* Add JobLeads provider for job offer and digest emails
+- *(extract)* Blacklist Jobijoba fake salary-listing offers
 
 
 ### Bug Fixes
