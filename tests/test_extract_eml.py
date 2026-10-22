@@ -371,6 +371,65 @@ def test_main_marks_a_blacklisted_offer_and_sets_raison_exclusion(tmp_path, monk
     assert "Blacklisté" in rows[0]["Notes"]
 
 
+def test_main_blacklists_a_jobijoba_fake_salary_listing(tmp_path, monkeypatch):
+    sources_dir = tmp_path / "sources"
+    _setup_paths(tmp_path, monkeypatch)
+    _write_eml(sources_dir / "jobijoba" / "raw.eml")
+    ledger = _ledger("jobijoba/raw.eml")
+    offers = [
+        {
+            "titre": "Ingénieur Java (H/F) - €38.000 - €55.000 Par An",
+            "entreprise": "Acme",
+            "ville": "Paris",
+        }
+    ]
+
+    with (
+        patch.object(extract_mod, "load_config", return_value=CONFIG),
+        patch.object(extract_mod, "load_patterns", return_value={}),
+        patch.object(extract_mod, "load_ledger", return_value=ledger),
+        patch.object(extract_mod, "detect_provider", return_value=("jobijoba_alerte", {})),
+        patch.object(extract_mod, "EXTRACTORS", {"jobijoba_alerte": lambda html, msg, cfg: offers}),
+        patch.object(extract_mod, "save_ledger"),
+    ):
+        main(dry_run=False)
+
+    import_file = next((tmp_path / "output").glob("import_*.csv"))
+    rows = list(csv.DictReader(import_file.open(encoding="utf-8"), delimiter=";"))
+    assert rows[0]["Raison_exclusion"] == "Hors profil"
+    assert "offre bidon, renvoie à une liste" in rows[0]["Notes"]
+
+
+def test_main_does_not_apply_the_jobijoba_fake_salary_pattern_to_other_providers(
+    tmp_path, monkeypatch
+):
+    sources_dir = tmp_path / "sources"
+    _setup_paths(tmp_path, monkeypatch)
+    _write_eml(sources_dir / "indeed" / "raw.eml")
+    ledger = _ledger("indeed/raw.eml")
+    offers = [
+        {
+            "titre": "Ingénieur Java (H/F) - €38.000 - €55.000 Par An",
+            "entreprise": "Acme",
+            "ville": "Paris",
+        }
+    ]
+
+    with (
+        patch.object(extract_mod, "load_config", return_value=CONFIG),
+        patch.object(extract_mod, "load_patterns", return_value={}),
+        patch.object(extract_mod, "load_ledger", return_value=ledger),
+        patch.object(extract_mod, "detect_provider", return_value=("test_provider", {})),
+        patch.object(extract_mod, "EXTRACTORS", {"test_provider": lambda html, msg, cfg: offers}),
+        patch.object(extract_mod, "save_ledger"),
+    ):
+        main(dry_run=False)
+
+    import_file = next((tmp_path / "output").glob("import_*.csv"))
+    rows = list(csv.DictReader(import_file.open(encoding="utf-8"), delimiter=";"))
+    assert rows[0]["Raison_exclusion"] == ""
+
+
 def test_main_marks_a_stage_alternance_offer(tmp_path, monkeypatch):
     sources_dir = tmp_path / "sources"
     _setup_paths(tmp_path, monkeypatch)

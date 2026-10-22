@@ -33,6 +33,7 @@ from extract.filters import (
     extract_stack,
     is_blacklisted,
     is_hors_stack,
+    is_jobijoba_fake_salary_listing,
     is_stage_alternance,
 )
 from extract.geo import get_dept
@@ -281,6 +282,9 @@ def main(dry_run: bool, force_headers: bool | None = None):
             notes = offer.get("notes", "")
 
             bl_term = is_blacklisted(offer["titre"], blacklist)
+            if not bl_term and provider_key == "jobijoba_alerte":
+                if is_jobijoba_fake_salary_listing(offer["titre"]):
+                    bl_term = "offre bidon, renvoie à une liste"
             if bl_term:
                 stats["blacklistes"] += 1
                 marker = f"⛔ Blacklisté: {bl_term}"

@@ -3,6 +3,7 @@ from extract.filters import (
     extract_stack,
     is_blacklisted,
     is_hors_stack,
+    is_jobijoba_fake_salary_listing,
     is_stage_alternance,
 )
 
@@ -62,6 +63,23 @@ def test_is_hors_stack_false_when_only_javascript_is_present():
 def test_is_hors_stack_false_when_stack_is_empty():
     excluded = ["C++", "C#", ".Net", "Java"]
     assert is_hors_stack("", excluded) is False
+
+
+def test_is_jobijoba_fake_salary_listing_matches_titre_ending_with_the_salary_pattern():
+    titre = "Ingénieur Java (H/F) - €38.000 - €55.000 Par An"
+    assert is_jobijoba_fake_salary_listing(titre) is True
+
+
+def test_is_jobijoba_fake_salary_listing_false_when_titre_does_not_end_with_the_pattern():
+    assert is_jobijoba_fake_salary_listing("Développeur Python CDI") is False
+
+
+def test_is_jobijoba_fake_salary_listing_false_when_amount_has_three_digits():
+    assert is_jobijoba_fake_salary_listing("Développeur Python - €100.000 Par An") is False
+
+
+def test_is_jobijoba_fake_salary_listing_is_case_sensitive():
+    assert is_jobijoba_fake_salary_listing("Développeur Python - €55.000 par an") is False
 
 
 def test_extract_stack_finds_multiple_technologies():

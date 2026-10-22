@@ -47,6 +47,18 @@ def is_hors_stack(stack: str, excluded_tags: list[str]) -> bool:
     return bool(tags & set(excluded_tags))
 
 
+# Motif Jobijoba repéré comme offre bidon (agrégateur qui renvoie vers une liste
+# plutôt qu'une offre réelle) : titre se terminant par un montant arrondi à 2
+# chiffres suivi de ".000 Par An" - sensible à la casse ("Par An" exact), car
+# c'est précisément le gabarit Jobijoba a produit pour ces offres.
+JOBIJOBA_FAKE_SALARY_RE = re.compile(r"€\d{2}\.0{3} Par An$")
+
+
+def is_jobijoba_fake_salary_listing(titre: str) -> bool:
+    """True si le titre Jobijoba correspond au motif d'offre bidon connu."""
+    return bool(JOBIJOBA_FAKE_SALARY_RE.search(titre))
+
+
 def extract_stack(text: str, keywords: dict) -> str:
     """Retourne les tags tech trouvés dans le texte, séparés par virgules."""
     text_lower = text.lower()
