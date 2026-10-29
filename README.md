@@ -37,9 +37,11 @@ output/import_YYYYMMDD.csv  ← new offers from this run, still produced
   sheets_sync.py      ← appends new rows to the Sheet, reproduces formatting
         ↓
   Google Sheet         ← master tracking sheet
+        ↓
+  gmail_labeling.py   ← marks processed emails as read, labels and archives them in Gmail
 ```
 
-`run_pipeline.py` runs all five steps in sequence (the four scripts above, then `gmail_labeling.py`, which marks the processed emails as read, labels and archives them in Gmail) and is the recommended entry point.
+`run_pipeline.py` runs all five scripts above in sequence and is the recommended entry point.
 
 ---
 
