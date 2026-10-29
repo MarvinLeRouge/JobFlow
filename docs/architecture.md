@@ -4,15 +4,15 @@ This document covers the *why* behind the main design choices. For usage and con
 
 ---
 
-## Pipeline: four independent, fail-fast stages
+## Pipeline: five independent, fail-fast stages
 
 ```
-fetch_gmail.py → rename_eml.py → extract_eml.py → sheets_sync.py
+fetch_gmail.py → rename_eml.py → extract_eml.py → sheets_sync.py → gmail_labeling.py
 ```
 
 Each stage is a standalone script with its own dry-run mode, driven by a single shared state file, `logs/email_ledger.json` (keyed by Message-ID), rather than by re-scanning `sources/` from scratch on every run. This makes every stage idempotent: re-running `rename_eml.py` or `extract_eml.py` after a partial failure only processes what the ledger still marks as pending, instead of reprocessing (and re-deduplicating, re-writing) everything.
 
-`run_pipeline.py` chains the four stages and stops at the first one that raises, so a later stage never runs against a state left inconsistent by an earlier failure (e.g. `sheets_sync.py` never runs against an `import_YYYYMMDD.csv` that `extract_eml.py` only half-wrote).
+`run_pipeline.py` chains the five stages and stops at the first one that raises, so a later stage never runs against a state left inconsistent by an earlier failure (e.g. `sheets_sync.py` never runs against an `import_YYYYMMDD.csv` that `extract_eml.py` only half-wrote).
 
 ---
 

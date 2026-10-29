@@ -37,9 +37,11 @@ output/import_YYYYMMDD.csv  ← nouvelles offres du run, toujours produit
   sheets_sync.py      ← ajoute les nouvelles lignes dans la Sheet, reproduit la mise en forme
         ↓
   Google Sheet         ← feuille de suivi principale
+        ↓
+  gmail_labeling.py   ← marque les emails traités comme lus, les labellise et les archive dans Gmail
 ```
 
-`run_pipeline.py` enchaîne les quatre étapes et constitue le point d'entrée recommandé.
+`run_pipeline.py` enchaîne les cinq scripts ci-dessus et constitue le point d'entrée recommandé.
 
 ---
 
