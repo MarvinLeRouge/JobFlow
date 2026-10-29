@@ -4,15 +4,15 @@ Ce document couvre le *pourquoi* des principaux choix de conception. Pour l'usag
 
 ---
 
-## Pipeline : quatre étapes indépendantes, fail-fast
+## Pipeline : cinq étapes indépendantes, fail-fast
 
 ```
-fetch_gmail.py → rename_eml.py → extract_eml.py → sheets_sync.py
+fetch_gmail.py → rename_eml.py → extract_eml.py → sheets_sync.py → gmail_labeling.py
 ```
 
 Chaque étape est un script autonome avec son propre mode dry-run, piloté par un unique fichier d'état partagé, `logs/email_ledger.json` (indexé par Message-ID), plutôt que par un re-scan complet de `sources/` à chaque run. Ça rend chaque étape idempotente : relancer `rename_eml.py` ou `extract_eml.py` après un échec partiel ne retraite que ce que le ledger marque encore en attente, au lieu de tout retraiter (et redédoublonner, réécrire).
 
-`run_pipeline.py` enchaîne les quatre étapes et s'arrête à la première qui lève une exception, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par un échec précédent (ex : `sheets_sync.py` ne tourne jamais sur un `import_YYYYMMDD.csv` qu'`extract_eml.py` n'aurait qu'à moitié écrit).
+`run_pipeline.py` enchaîne les cinq étapes et s'arrête à la première qui lève une exception, pour qu'une étape suivante ne s'exécute jamais sur un état laissé incohérent par un échec précédent (ex : `sheets_sync.py` ne tourne jamais sur un `import_YYYYMMDD.csv` qu'`extract_eml.py` n'aurait qu'à moitié écrit).
 
 ---
 

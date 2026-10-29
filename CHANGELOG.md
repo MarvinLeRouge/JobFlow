@@ -98,6 +98,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(root)* Move French community-health docs into docs/i18n/fr
 - Align readme tagline with repository description
 - Align README test count and coverage paragraph
+- *(readme)* Fix pipeline step count from four to five
 
 
 ### Testing

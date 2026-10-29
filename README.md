@@ -39,7 +39,7 @@ output/import_YYYYMMDD.csv  ← new offers from this run, still produced
   Google Sheet         ← master tracking sheet
 ```
 
-`run_pipeline.py` runs all four steps in sequence and is the recommended entry point.
+`run_pipeline.py` runs all five steps in sequence (the four scripts above, then `gmail_labeling.py`, which marks the processed emails as read, labels and archives them in Gmail) and is the recommended entry point.
 
 ---
 

@@ -39,7 +39,7 @@ output/import_YYYYMMDD.csv  ← nouvelles offres du run, toujours produit
   Google Sheet         ← feuille de suivi principale
 ```
 
-`run_pipeline.py` enchaîne les quatre étapes et constitue le point d'entrée recommandé.
+`run_pipeline.py` enchaîne les cinq étapes (les quatre scripts ci-dessus, puis `gmail_labeling.py`, qui marque les emails traités comme lus, les labellise et les archive dans Gmail) et constitue le point d'entrée recommandé.
 
 ---
 
