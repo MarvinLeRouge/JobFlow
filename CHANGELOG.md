@@ -135,6 +135,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Update filtering blacklist
 - *(extract)* Add a read-only report for JobLeads offers with a missing URL
 - *(gitignore)* Ignore codegraph folder
+- *(changelog)* Auto-merge the catch-up CHANGELOG.md PR
 
 
 ### Chore
