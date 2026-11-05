@@ -61,6 +61,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(sheets-sync)* Apply column R dropdown to exact-match values, not just empty
 - *(ci)* Trigger workflow on all pull requests, not just non-doc changes
 - *(extract)* Bound JobLeads card URL search by neighboring title, not a fixed window
+- *(login-check)* Stamp the daily marker only after the user answers
 
 
 ### Refactor

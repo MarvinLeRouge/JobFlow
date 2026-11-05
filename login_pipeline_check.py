@@ -42,8 +42,9 @@ def mark_checked_today() -> None:
 
 
 def prompt_and_maybe_run() -> None:
-    mark_checked_today()
     answer = input("Lancer le pipeline JobFlow ? [o/N] ").strip().lower()
+    # Marked only once answered: a closed terminal or Ctrl+C asks again next login.
+    mark_checked_today()
     if answer in ("o", "oui", "y", "yes"):
         subprocess.run([str(ROOT / ".venv" / "bin" / "python"), str(ROOT / "run_pipeline.py")])
     input("Appuyez sur Entree pour fermer...")

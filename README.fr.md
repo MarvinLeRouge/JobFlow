@@ -206,7 +206,7 @@ python3 login_pipeline_check.py           # lancé par l'autostart, sans termina
 python3 login_pipeline_check.py --prompt  # lancé par l'étape ci-dessus, dans un terminal
 ```
 
-Sans `--prompt`, il vérifie `logs/last_pipeline_check.json` (un marqueur dédié, pas le ledger de fetch - une journée sans nouvel email ne met jamais à jour `fetched_at` du ledger, ce qui casserait un test "une fois par jour") et ne fait rien si la vérification du jour a déjà eu lieu. Sinon, il se relance lui-même dans un terminal via `x-terminal-emulator` (l'alternative générique Debian) avec `--prompt`, qui demande directement à l'utilisateur et lance `run_pipeline.py` (via le `.venv` du projet) en cas de confirmation. Le marqueur est mis à jour quelle que soit la réponse, donc il ne redemandera pas avant le prochain jour calendaire.
+Sans `--prompt`, il vérifie `logs/last_pipeline_check.json` (un marqueur dédié, pas le ledger de fetch - une journée sans nouvel email ne met jamais à jour `fetched_at` du ledger, ce qui casserait un test "une fois par jour") et ne fait rien si la vérification du jour a déjà eu lieu. Sinon, il se relance lui-même dans un terminal via `x-terminal-emulator` (l'alternative générique Debian) avec `--prompt`, qui demande directement à l'utilisateur et lance `run_pipeline.py` (via le `.venv` du projet) en cas de confirmation. Le marqueur est mis à jour dès que l'utilisateur répond, oui ou non, donc il ne redemandera pas avant le prochain jour calendaire. Fermer le terminal ou faire Ctrl+C avant de répondre laisse la journée non vérifiée : le prochain login redemande.
 
 **Configuration locale one-time** (non gérée par ce dépôt) : voir [Autostart](docs/operations.fr.md#autostart-vérification-déclenchée-au-login) dans la doc d'exploitation.
 

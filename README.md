@@ -206,7 +206,7 @@ python3 login_pipeline_check.py           # launched by autostart, no terminal a
 python3 login_pipeline_check.py --prompt  # launched by the step above, inside a terminal
 ```
 
-Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated marker, not the fetch ledger, since a day with zero new emails never updates the ledger's `fetched_at`, which would break a once-per-day check) and exits silently if today's check already happened. If not, it relaunches itself inside a terminal via `x-terminal-emulator` (Debian's generic terminal alternative) with `--prompt`, which asks the user directly and runs `run_pipeline.py` (via the project's own `.venv`) if confirmed. The marker is stamped regardless of the answer, so it will not ask again until the next calendar day.
+Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated marker, not the fetch ledger, since a day with zero new emails never updates the ledger's `fetched_at`, which would break a once-per-day check) and exits silently if today's check already happened. If not, it relaunches itself inside a terminal via `x-terminal-emulator` (Debian's generic terminal alternative) with `--prompt`, which asks the user directly and runs `run_pipeline.py` (via the project's own `.venv`) if confirmed. The marker is stamped once the user answers, yes or no, so it will not ask again until the next calendar day. Closing the terminal or pressing Ctrl+C before answering leaves the day unchecked, so the next login asks again.
 
 **One-time local setup** (not managed by this repo): see [Autostart](docs/operations.md#autostart-login-triggered-pipeline-check) in the operations doc.
 
