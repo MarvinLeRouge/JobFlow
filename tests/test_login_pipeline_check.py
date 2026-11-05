@@ -1,6 +1,8 @@
 from datetime import date
 from unittest.mock import patch
 
+import pytest
+
 import login_pipeline_check as login_check
 from login_pipeline_check import (
     already_checked_today,
@@ -64,6 +66,20 @@ def test_prompt_and_maybe_run_skips_the_pipeline_on_a_no_answer(tmp_path, monkey
         prompt_and_maybe_run()
 
     fake_run.assert_not_called()
+    assert already_checked_today() is True
+
+
+def test_prompt_and_maybe_run_leaves_the_day_unchecked_when_interrupted(tmp_path, monkeypatch):
+    monkeypatch.setattr(login_check, "MARKER_FILE", tmp_path / "last_pipeline_check.json")
+    with (
+        patch("builtins.input", side_effect=KeyboardInterrupt),
+        patch.object(login_check.subprocess, "run") as fake_run,
+        pytest.raises(KeyboardInterrupt),
+    ):
+        prompt_and_maybe_run()
+
+    fake_run.assert_not_called()
+    assert already_checked_today() is False
 
 
 def test_main_with_prompt_flag_calls_prompt_and_maybe_run_and_skips_the_date_gate(monkeypatch):
