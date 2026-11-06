@@ -154,15 +154,17 @@ FORCE_TEXT_COLUMNS = ("Source", "Dept")
 def row_values(row: dict, headers: list[str], row_number: int) -> list:
     """Ordered cell values for one CSV row, in the sheet's column order.
     The 'Traite' column is always replaced with the live formula
-    '=R{row_number}<>""' instead of the CSV's static default, so it stays
-    driven by column R rather than a fixed value. FORCE_TEXT_COLUMNS get a
+    '=(R{row_number}&H{row_number})<>""' instead of the CSV's static
+    default, so it turns TRUE as soon as Raison_exclusion (R) or Doublon_ID
+    (H) is filled - concatenation instead of OR() keeps the formula free of
+    argument separators, which differ between Sheets locales. FORCE_TEXT_COLUMNS get a
     leading apostrophe - USER_ENTERED write mode otherwise lets Sheets
     "smart"-reinterpret them (Source values like 'Talent.com' turned into
     an auto-linked chip, Dept values like '06' turned into the number 6,
     losing the leading zero), confirmed live against the production sheet."""
     values = [row.get(h, "") for h in headers]
     traite_index = headers.index("Traite")
-    values[traite_index] = f'=R{row_number}<>""'
+    values[traite_index] = f'=(R{row_number}&H{row_number})<>""'
     for col in FORCE_TEXT_COLUMNS:
         if col in headers:
             idx = headers.index(col)

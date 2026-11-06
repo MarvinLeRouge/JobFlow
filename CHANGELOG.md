@@ -42,6 +42,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(sheets)* Auto-consolidate redundant B+R conditional format rules after sync
 - *(extract)* Add JobLeads provider for job offer and digest emails
 - *(extract)* Blacklist Jobijoba fake salary-listing offers
+- *(sheets)* Mark duplicate rows as processed via the Traite formula
 
 
 ### Bug Fixes

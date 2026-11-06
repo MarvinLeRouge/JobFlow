@@ -170,7 +170,7 @@ def test_row_values_orders_by_headers_and_injects_traite_formula():
 
     result = row_values(row, headers, row_number=100)
 
-    assert result == ["E000001", "Dev", '=R100<>""', ""]
+    assert result == ["E000001", "Dev", '=(R100&H100)<>""', ""]
 
 
 def test_row_values_defaults_missing_fields_to_empty_string():
@@ -179,7 +179,7 @@ def test_row_values_defaults_missing_fields_to_empty_string():
 
     result = row_values(row, headers, row_number=50)
 
-    assert result == ["E000001", '=R50<>""', ""]
+    assert result == ["E000001", '=(R50&H50)<>""', ""]
 
 
 def test_row_values_preserves_raison_exclusion_value():
@@ -188,7 +188,7 @@ def test_row_values_preserves_raison_exclusion_value():
 
     result = row_values(row, headers, row_number=200)
 
-    assert result == ["E000002", '=R200<>""', "Blacklisté: nounou"]
+    assert result == ["E000002", '=(R200&H200)<>""', "Blacklisté: nounou"]
 
 
 def test_row_values_force_texts_source_to_avoid_sheets_autolink():
@@ -197,7 +197,7 @@ def test_row_values_force_texts_source_to_avoid_sheets_autolink():
 
     result = row_values(row, headers, row_number=100)
 
-    assert result == ["E000001", '=R100<>""', "'Talent.com"]
+    assert result == ["E000001", '=(R100&H100)<>""', "'Talent.com"]
 
 
 def test_row_values_force_texts_dept_to_avoid_leading_zero_loss():
@@ -206,7 +206,7 @@ def test_row_values_force_texts_dept_to_avoid_leading_zero_loss():
 
     result = row_values(row, headers, row_number=100)
 
-    assert result == ["E000001", '=R100<>""', "'06"]
+    assert result == ["E000001", '=(R100&H100)<>""', "'06"]
 
 
 def test_row_values_does_not_force_text_empty_source_or_dept():
@@ -215,7 +215,7 @@ def test_row_values_does_not_force_text_empty_source_or_dept():
 
     result = row_values(row, headers, row_number=100)
 
-    assert result == ["E000001", '=R100<>""', "", ""]
+    assert result == ["E000001", '=(R100&H100)<>""', "", ""]
 
 
 def test_get_sheet_id_finds_matching_title():
@@ -389,8 +389,8 @@ def test_write_new_rows_calls_values_update_with_correct_range_and_formula():
         valueInputOption="USER_ENTERED",
         body={
             "values": [
-                ["E000010", '=R100<>""'],
-                ["E000011", '=R101<>""'],
+                ["E000010", '=(R100&H100)<>""'],
+                ["E000011", '=(R101&H101)<>""'],
             ]
         },
     )
