@@ -139,6 +139,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(gitignore)* Ignore codegraph folder
 - *(changelog)* Auto-merge the catch-up CHANGELOG.md PR
 - *(python)* Bump to python 3.14
+- *(dependabot)* Add weekly uv and github-actions updates
 
 
 ### Chore
