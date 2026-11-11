@@ -144,3 +144,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Talent.com footer update
 
 
+### Build
+- *(deps)* Migrate from pip to uv with latest dependencies
+
+

@@ -8,7 +8,7 @@ Ceci est un projet personnel, mais les contributions externes (signalement de bu
 
 ## Prérequis
 
-- Python 3.13
+- [uv](https://docs.astral.sh/uv/) (installe la version de Python fixée dans `.python-version`)
 - Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.fr.md](../../setup_gmail_auth.fr.md)). Non nécessaire pour lancer la suite de tests.
 
 ## Installation locale
@@ -16,17 +16,16 @@ Ceci est un projet personnel, mais les contributions externes (signalement de bu
 ```bash
 git clone https://github.com/MarvinLeRouge/JobFlow.git
 cd JobFlow
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-pre-commit install   # une fois, pour activer le hook git
+uv sync
+uv run pre-commit install   # une fois, pour activer le hook git
 ```
 
 ## Lancer les tests
 
 ```bash
-pytest
-ruff check .
-ruff format --check .
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 Les trois doivent passer avant d'ouvrir une pull request.
