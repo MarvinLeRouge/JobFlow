@@ -37,14 +37,14 @@ Hidden=false
 `sheets_sync.py` enregistre tout échec dans `logs/sheets_sync_error.json` et refuse de tourner à nouveau (ainsi que `run_pipeline.py`) tant que ce n'est pas acquitté :
 
 ```bash
-python3 sheets_sync.py --ack-error
+uv run sheets_sync.py --ack-error
 ```
 
 Comme `sheets_sync.py` ne regarde jamais que le CSV d'import du **jour même**, un échec non acquitté un jour donné, suivi d'un run normal un jour plus tard, isole silencieusement les lignes de ce jour-là : elles ne sont jamais resynchronisées, et rien en aval ne remarque le trou de lui-même. Après avoir acquitté l'erreur, vérifier si des lignes ont été laissées de côté et les rattraper :
 
 ```bash
-python3 sheets_sync_recovery.py --dry-run   # rapport seul, aucune écriture
-python3 sheets_sync_recovery.py             # rattrape ce qui est trouvé
+uv run sheets_sync_recovery.py --dry-run   # rapport seul, aucune écriture
+uv run sheets_sync_recovery.py             # rattrape ce qui est trouvé
 ```
 
 Ce script compare chaque ID d'offre de la feuille avec l'archive locale `output/offres.csv` et rattrape tout ce qui manque, que ce soit un trou interne ou un retard en fin de séquence. Voir la section [`sheets_sync_recovery.py`](../README.fr.md#sheets_sync_recoverypy) du README pour le comportement complet (lignes séparatrices, relances idempotentes, ce que le script refuse de toucher).

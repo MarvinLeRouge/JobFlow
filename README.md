@@ -7,7 +7,7 @@
 > *Python data pipeline that turns job alert emails from several providers into a single deduplicated, always-current Google Sheet: Gmail API ingestion, per-provider parsing, cross-source deduplication, and an error gate protecting the production sheet.*
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
 [![codecov](https://codecov.io/gh/MarvinLeRouge/JobFlow/graph/badge.svg)](https://codecov.io/gh/MarvinLeRouge/JobFlow)
 ![Tests](https://img.shields.io/badge/Tests-360%20passing-brightgreen)
 [![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)](LICENSE)
@@ -52,9 +52,9 @@ output/import_YYYYMMDD.csv  ← new offers from this run, still produced
 Queries the Gmail API for new alert emails, routes them into `sources/<provider>/`, and records each one in `logs/email_ledger.json`.
 
 ```bash
-python3 fetch_gmail.py                  # fetch new emails
-python3 fetch_gmail.py --dry-run        # simulation, no download or write
-python3 fetch_gmail.py --since-days 30  # first run only: emails from the last 30 days
+uv run fetch_gmail.py                  # fetch new emails
+uv run fetch_gmail.py --dry-run        # simulation, no download or write
+uv run fetch_gmail.py --since-days 30  # first run only: emails from the last 30 days
 ```
 
 `--since-days` is only needed on the very first run, when the ledger has no fetch history yet. Every later run derives its start date automatically from the most recent `fetched_at` in the ledger, with a safety margin so nothing falls through the gap between two runs.
@@ -70,10 +70,10 @@ Files written: `.eml` files under `sources/<provider>/`, `logs/email_ledger.json
 Renames `.eml` files to the `yyyymmdd-hhmm-name.eml` format, detects duplicates by Message-ID, and checks that each file sits in the right provider folder.
 
 ```bash
-python3 rename_eml.py              # rename + dedup
-python3 rename_eml.py --dry-run    # simulation, no changes
-python3 rename_eml.py --check      # check folders only, read-only
-python3 rename_eml.py --purge      # empty sources/_duplicates/
+uv run rename_eml.py              # rename + dedup
+uv run rename_eml.py --dry-run    # simulation, no changes
+uv run rename_eml.py --check      # check folders only, read-only
+uv run rename_eml.py --purge      # empty sources/_duplicates/
 ```
 
 Files written: `logs/email_ledger.json`.
@@ -85,10 +85,10 @@ Files written: `logs/email_ledger.json`.
 Extracts offers from every `.eml` marked `PENDING` in the ledger, deduplicates them, detects the tech stack and blacklisted titles, then writes two CSV files. `extract_eml.py` itself is a thin orchestrator; the actual parsing/filtering/IO logic lives in the `extract/` package (`extract/providers/` for the per-provider HTML parsers, `extract/filters.py` for dedup/blacklist/stack, `extract/geo.py` for city→département resolution, `extract/io.py` for CSV/log writing).
 
 ```bash
-python3 extract_eml.py                # full extraction
-python3 extract_eml.py --dry-run      # simulation, no write
-python3 extract_eml.py --with-headers # force the header row in the import CSV
-python3 extract_eml.py --no-headers   # force no header row
+uv run extract_eml.py                # full extraction
+uv run extract_eml.py --dry-run      # simulation, no write
+uv run extract_eml.py --with-headers # force the header row in the import CSV
+uv run extract_eml.py --no-headers   # force no header row
 ```
 
 Files written:
@@ -105,14 +105,14 @@ Supported providers: France Travail, Indeed (alerts + direct match), LinkedIn, M
 Syncs new offers from the latest `output/import_YYYYMMDD.csv` into the real Google Sheet: compares the sheet's own highest offer ID (column A) against the CSV to find only the rows it doesn't already have, appends them, reproduces column B's (`Traite`) formula/dropdown and column R's (`Raison_exclusion`) dropdown on those rows by copying formatting from the dedicated "Références" tab, and extends the sheet's row-level conditional formatting rules (duplicate/blacklist/alternance highlighting, "En cours" status in column A) to cover the newly appended rows.
 
 ```bash
-python3 sheets_sync.py             # sync new rows to the Sheet
-python3 sheets_sync.py --dry-run   # simulation, no write, just reports what would sync
-python3 sheets_sync.py --ack-error # acknowledge and clear a blocked error state
+uv run sheets_sync.py             # sync new rows to the Sheet
+uv run sheets_sync.py --dry-run   # simulation, no write, just reports what would sync
+uv run sheets_sync.py --ack-error # acknowledge and clear a blocked error state
 ```
 
 It only looks at **today's** `output/import_YYYYMMDD.csv`. If `extract_eml.py` hasn't produced one today, it prints a message and exits without error.
 
-**Error gate:** on any failure, the error message and timestamp are recorded to `logs/sheets_sync_error.json`. Every later run of `sheets_sync.py` or `run_pipeline.py` then stops immediately with that message until it is acknowledged with `python3 sheets_sync.py --ack-error`. `fetch_gmail.py`, `rename_eml.py` and `extract_eml.py` are unaffected by the gate and remain usable individually.
+**Error gate:** on any failure, the error message and timestamp are recorded to `logs/sheets_sync_error.json`. Every later run of `sheets_sync.py` or `run_pipeline.py` then stops immediately with that message until it is acknowledged with `uv run sheets_sync.py --ack-error`. `fetch_gmail.py`, `rename_eml.py` and `extract_eml.py` are unaffected by the gate and remain usable individually.
 
 Files written: nothing durable locally besides `logs/sheets_sync_error.json` on failure; the sheet itself is the only lasting output.
 
@@ -123,8 +123,8 @@ Files written: nothing durable locally besides `logs/sheets_sync_error.json` on 
 Manually-triggered only - never called by `run_pipeline.py`. Because `sheets_sync.py` only ever looks at **today's** import CSV (see above), an unacknowledged failure on one day followed by a normal run on a later day silently orphans that day's rows forever: they're never resynced, and the sheet's "highest ID" bookkeeping has already moved past them, so nothing downstream notices the hole on its own. This script detects and repairs exactly that.
 
 ```bash
-python3 sheets_sync_recovery.py --dry-run   # report only, no write
-python3 sheets_sync_recovery.py             # backfill what's found
+uv run sheets_sync_recovery.py --dry-run   # report only, no write
+uv run sheets_sync_recovery.py             # backfill what's found
 ```
 
 Compares every offer ID in the sheet's column A against `output/offres.csv` (the cumulative local archive, expected to be perfectly ID-contiguous from `E000001`) to find any ID missing from the sheet - an internal gap or a lagging tail, same detection either way. Each missing contiguous run is appended at the sheet's current end, preceded by one blank separator row so a backfilled batch stays visually distinguishable from a normal same-day sync. Column A briefly ends up out of strict numeric order after a backfill (cosmetic only - nothing downstream depends on ordering; reorder by hand if desired).
@@ -140,9 +140,9 @@ Safe to rerun after an interruption (e.g. hitting the Sheets API's per-minute wr
 Recommended entry point. Runs `fetch_gmail` → `rename_eml` → `extract_eml` → `sheets_sync` → `gmail_labeling` in sequence.
 
 ```bash
-python3 run_pipeline.py                  # full pipeline
-python3 run_pipeline.py --dry-run        # simulate all five steps
-python3 run_pipeline.py --since-days 30  # first run, no fetch history yet
+uv run run_pipeline.py                  # full pipeline
+uv run run_pipeline.py --dry-run        # simulate all five steps
+uv run run_pipeline.py --since-days 30  # first run, no fetch history yet
 ```
 
 `--since-days` is forwarded to `fetch_gmail.py`. It is needed for the very first run, before any ledger entry exists: without it, the run stops on "impossible de déterminer un point de départ".
@@ -164,7 +164,7 @@ Deliberately restricted in scope, given how much `gmail.modify` technically allo
 **Recovering from a pipeline crash that happens after `extract_eml` succeeded** (e.g. `sheets_sync` or `gmail_labeling` failing on an expired OAuth token, see [OAuth2 setup](docs/operations.md#oauth2-setup)): this step's delta is a snapshot of the ledger's `PENDING` entries taken right before `extract_eml` runs, recomputed fresh on every `run_pipeline.py` invocation. If `extract_eml` already flipped those entries to `OK`/`PARTIEL` before the crash, simply rerunning `run_pipeline.py` will not pick them back up for `gmail_labeling` - they are no longer `PENDING`. Catch them up manually instead:
 
 ```bash
-python3 -c "
+uv run python -c "
 import json
 from datetime import date
 with open('logs/email_ledger.json') as f:
@@ -183,8 +183,8 @@ gmail_labeling.run(ids, dry_run=True)  # drop dry_run once the count looks right
 Manually-triggered only - never called by `run_pipeline.py` or `login_pipeline_check.py`. Moves already-labeled (`Recherche emploi`) emails to Gmail's Trash, but only the ones the local ledger confirms this pipeline actually processed.
 
 ```bash
-python3 gmail_cleanup.py --dry-run
-python3 gmail_cleanup.py
+uv run gmail_cleanup.py --dry-run
+uv run gmail_cleanup.py
 ```
 
 The Gmail label alone is never trusted as a deletion signal: it finds candidates by searching the label, then intersects that list with the ledger's known-processed `gmail_id` values before trashing anything, since the label may also be applied by hand to unrelated emails (the label existed before this pipeline did, used for filing real job applications). Entries with `statut_extraction == "ERREUR"` are excluded from the known-processed set on purpose - extraction genuinely failed for them, so they stay labeled and visible until resolved by hand rather than being auto-cleaned.
@@ -202,8 +202,8 @@ Optional convenience layer on top of `run_pipeline.py`: prompts once per calenda
 Two-stage, both stages run this same script:
 
 ```bash
-python3 login_pipeline_check.py           # launched by autostart, no terminal attached
-python3 login_pipeline_check.py --prompt  # launched by the step above, inside a terminal
+uv run login_pipeline_check.py           # launched by autostart, no terminal attached
+uv run login_pipeline_check.py --prompt  # launched by the step above, inside a terminal
 ```
 
 Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated marker, not the fetch ledger, since a day with zero new emails never updates the ledger's `fetched_at`, which would break a once-per-day check) and exits silently if today's check already happened. If not, it relaunches itself inside a terminal via `x-terminal-emulator` (Debian's generic terminal alternative) with `--prompt`, which asks the user directly and runs `run_pipeline.py` (via the project's own `.venv`) if confirmed. The marker is stamped once the user answers, yes or no, so it will not ask again until the next calendar day. Closing the terminal or pressing Ctrl+C before answering leaves the day unchecked, so the next login asks again.
@@ -217,7 +217,7 @@ Bare (no `--prompt`), it checks `logs/last_pipeline_check.json` (a dedicated mar
 One-off diagnostic tool built during `sheets_sync.py`'s feasibility spike, not part of the regular pipeline. Prints a sheet's cell formulas, data validation rules, and conditional formatting, read directly via the Sheets API, to inspect exactly what needs to be replicated.
 
 ```bash
-python3 inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
+uv run inspect_sheet_formatting.py <spreadsheet_id> <sheet_name>
 ```
 
 Run only against a duplicated **test** sheet, never production. Files written: none, prints to stdout.
@@ -369,11 +369,11 @@ The row is kept in the CSV and imported normally into Sheets.
 ## Testing
 
 ```bash
-pip install -r requirements-dev.txt
-pytest
-ruff check .
-ruff format --check .
-pre-commit install   # once, to enable the git hook
+uv sync
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run pre-commit install   # once, to enable the git hook
 ```
 
 Coverage targets (`codecov.yml`): project 80% (±2%), patch 90% (±5%), set to **informational only** - a run below target does not block CI or a PR merge (see the badge above for the current percentage).
@@ -387,7 +387,7 @@ Coverage targets (`codecov.yml`): project 80% (±2%), patch 90% (±5%), set to *
 3. Implement `extract_<provider>(html, msg, patterns)` in a new `extract/providers/<provider>.py`
 4. Import it and add it to the `EXTRACTORS` table in `extract/providers/__init__.py`
 5. Add tests in `tests/extract/providers/test_<provider>.py`
-6. Test: `python3 extract_eml.py --dry-run`
+6. Test: `uv run extract_eml.py --dry-run`
 
 ---
 
@@ -410,7 +410,7 @@ Personal project with a dual purpose:
 
 | Layer | Technology |
 |---|---|
-| Language | ![Python](https://img.shields.io/badge/Python_3.13-3776AB?logo=python&logoColor=white&style=flat-square) |
+| Language | ![Python](https://img.shields.io/badge/Python_3.14-3776AB?logo=python&logoColor=white&style=flat-square) |
 | Email fetch | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sheet sync | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Geocoding fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |

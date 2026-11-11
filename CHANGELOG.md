@@ -138,9 +138,15 @@ run `git-cliff -o CHANGELOG.md`.
 - *(extract)* Add a read-only report for JobLeads offers with a missing URL
 - *(gitignore)* Ignore codegraph folder
 - *(changelog)* Auto-merge the catch-up CHANGELOG.md PR
+- *(python)* Bump to python 3.14
+- *(dependabot)* Add weekly uv and github-actions updates
 
 
 ### Chore
 - Talent.com footer update
+
+
+### Build
+- *(deps)* Migrate from pip to uv with latest dependencies
 
 

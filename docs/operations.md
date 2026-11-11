@@ -37,14 +37,14 @@ Hidden=false
 `sheets_sync.py` records any failure to `logs/sheets_sync_error.json` and refuses to run again (along with `run_pipeline.py`) until it is acknowledged:
 
 ```bash
-python3 sheets_sync.py --ack-error
+uv run sheets_sync.py --ack-error
 ```
 
 Because `sheets_sync.py` only ever looks at **today's** import CSV, an unacknowledged failure on one day followed by a normal run on a later day silently orphans that day's rows: they are never resynced, and nothing downstream notices the hole on its own. After acknowledging the error, check whether any rows were left behind and backfill them:
 
 ```bash
-python3 sheets_sync_recovery.py --dry-run   # report only, no write
-python3 sheets_sync_recovery.py             # backfill what's found
+uv run sheets_sync_recovery.py --dry-run   # report only, no write
+uv run sheets_sync_recovery.py             # backfill what's found
 ```
 
 This compares every offer ID in the sheet against the local `output/offres.csv` archive and backfills anything missing, whether an internal gap or a lagging tail. See the [`sheets_sync_recovery.py`](../README.md#sheets_sync_recoverypy) section of the README for the full behavior (separator rows, idempotent reruns, what it refuses to touch).
