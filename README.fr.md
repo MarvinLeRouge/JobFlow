@@ -7,7 +7,7 @@
 > *Pipeline de données Python qui transforme les alertes emploi de plusieurs plateformes en un Google Sheet unique, dédoublonné et toujours à jour : ingestion via l'API Gmail, parsing par plateforme, dédoublonnage inter-sources et garde-fou d'erreur protégeant la feuille de production.*
 
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
 [![codecov](https://codecov.io/gh/MarvinLeRouge/JobFlow/graph/badge.svg)](https://codecov.io/gh/MarvinLeRouge/JobFlow)
 ![Tests](https://img.shields.io/badge/Tests-360%20passants-brightgreen)
 [![License](https://img.shields.io/github/license/MarvinLeRouge/JobFlow?cacheSeconds=3600)](LICENSE)
@@ -411,7 +411,7 @@ Projet personnel à double objectif :
 
 | Couche | Technologie |
 |---|---|
-| Langage | ![Python](https://img.shields.io/badge/Python_3.13-3776AB?logo=python&logoColor=white&style=flat-square) |
+| Langage | ![Python](https://img.shields.io/badge/Python_3.14-3776AB?logo=python&logoColor=white&style=flat-square) |
 | Fetch email | ![Gmail API](https://img.shields.io/badge/Gmail_API-EA4335?logo=gmail&logoColor=white&style=flat-square) OAuth2 |
 | Sync feuille | ![Google Sheets API](https://img.shields.io/badge/Google_Sheets_API-34A853?logo=googlesheets&logoColor=white&style=flat-square) |
 | Géocodage fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |

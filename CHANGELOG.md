@@ -138,6 +138,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(extract)* Add a read-only report for JobLeads offers with a missing URL
 - *(gitignore)* Ignore codegraph folder
 - *(changelog)* Auto-merge the catch-up CHANGELOG.md PR
+- *(python)* Bump to python 3.14
 
 
 ### Chore
