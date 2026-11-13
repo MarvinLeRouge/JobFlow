@@ -140,6 +140,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(changelog)* Auto-merge the catch-up CHANGELOG.md PR
 - *(python)* Bump to python 3.14
 - *(dependabot)* Add weekly uv and github-actions updates
+- Run CI on the changelog bot PR so its auto-merge can complete
 
 
 ### Chore

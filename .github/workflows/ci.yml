@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  # Dispatched by changelog.yml on its bot PR: events created with GITHUB_TOKEN do not
+  # trigger pull_request runs, but workflow_dispatch is exempt from that rule
+  workflow_dispatch: {}
   push:
     branches: ["main"]
     paths-ignore:
