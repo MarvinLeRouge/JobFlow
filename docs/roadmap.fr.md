@@ -11,3 +11,4 @@
 ## Section 1 - Maintenance
 
 - [x] CHORE-001 - Migrer vers uv et Python 3.14, ajouter Dependabot
+- [x] CI-001 - Lancer la CI sur la PR du bot changelog pour que son auto-merge aboutisse
