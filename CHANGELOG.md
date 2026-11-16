@@ -110,6 +110,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(scripts)* Cover run and main of remaining one-shot maintenance scripts
 - *(extract)* Cover geo dept resolution and io file-writing helpers
 - *(core)* Cover fetch_gmail, rename_eml, and extract_eml orchestration
+- *(coverage)* Exclude cli entry blocks from coverage
 
 
 ### Miscellaneous Tasks

@@ -31,3 +31,7 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.coverage.report]
+# CLI entry blocks only parse argv and call the tested main()/run() functions
+exclude_also = ['if __name__ == .__main__.:']
