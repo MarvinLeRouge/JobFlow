@@ -77,7 +77,7 @@ jobs:
         run: uv sync --locked
 
       - name: pip-audit (dependency vulnerability scan)
-        run: uv export --format requirements-txt --no-hashes > /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
+        run: uv export --format requirements-txt --no-hashes --no-emit-project > /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
 
   ci-status:
     name: CI status

@@ -14,3 +14,4 @@
 - [x] CI-001 - Run CI on the changelog bot PR so its auto-merge can complete
 - [x] TEST-001 - Close per-file coverage gaps
 - [x] CI-002 - Pin every GitHub Action to its current major by commit SHA, changelog workflow on Node 26, align the Dependabot config (single actions group)
+- [x] CI-003 - Leave the project itself out of the pip-audit export (--no-emit-project)
