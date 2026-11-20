@@ -15,3 +15,4 @@
 - [x] TEST-001 - Close per-file coverage gaps
 - [x] CI-002 - Pin every GitHub Action to its current major by commit SHA, changelog workflow on Node 26, align the Dependabot config (single actions group)
 - [x] CI-003 - Leave the project itself out of the pip-audit export (--no-emit-project)
+- [x] CI-004 - Raise the coverage floor from 80% to 85% (gates and docs)

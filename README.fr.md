@@ -377,7 +377,7 @@ uv run ruff format --check .
 uv run pre-commit install   # une seule fois, pour activer le hook git
 ```
 
-Objectifs de couverture (`codecov.yml`) : projet 80 % (±2 %), patch 90 % (±5 %), réglés en **informatifs seulement** - un run en dessous de l'objectif ne bloque ni la CI ni la fusion d'une PR (voir le badge ci-dessus pour le pourcentage actuel).
+Objectifs de couverture (`codecov.yml`) : projet 85 % (±2 %), patch 90 % (±5 %), réglés en **informatifs seulement** - un run en dessous de l'objectif ne bloque ni la CI ni la fusion d'une PR (voir le badge ci-dessus pour le pourcentage actuel).
 
 ---
 

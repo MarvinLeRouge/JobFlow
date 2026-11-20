@@ -144,6 +144,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Run CI on the changelog bot PR so its auto-merge can complete
 - *(actions)* Pin actions to current majors by sha (CI-002)
 - *(security)* Leave the project out of the pip-audit export (CI-003)
+- *(coverage)* Raise the coverage floor to 85% (CI-004)
 
 
 ### Chore
