@@ -143,6 +143,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(dependabot)* Add weekly uv and github-actions updates
 - Run CI on the changelog bot PR so its auto-merge can complete
 - *(actions)* Pin actions to current majors by sha (CI-002)
+- *(security)* Leave the project out of the pip-audit export (CI-003)
 
 
 ### Chore
