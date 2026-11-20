@@ -376,7 +376,7 @@ uv run ruff format --check .
 uv run pre-commit install   # once, to enable the git hook
 ```
 
-Coverage targets (`codecov.yml`): project 80% (±2%), patch 90% (±5%), set to **informational only** - a run below target does not block CI or a PR merge (see the badge above for the current percentage).
+Coverage targets (`codecov.yml`): project 85% (±2%), patch 90% (±5%), set to **informational only** - a run below target does not block CI or a PR merge (see the badge above for the current percentage).
 
 ---
 
