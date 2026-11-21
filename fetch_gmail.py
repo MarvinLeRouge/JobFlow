@@ -116,7 +116,7 @@ def list_message_ids(service, query: str) -> list[str]:
     """Return all Gmail message IDs matching the query, paginating via
     nextPageToken (normal volume never needs a second page, but this
     avoids silently dropping messages after a long gap between runs)."""
-    ids = []
+    ids: list[str] = []
     request = service.users().messages().list(userId="me", q=query)
     while request is not None:
         response = request.execute()

@@ -17,3 +17,4 @@
 - [x] CI-003 - Leave the project itself out of the pip-audit export (--no-emit-project)
 - [x] CI-004 - Raise the coverage floor from 80% to 85% (gates and docs)
 - [x] CI-005 - Scan staged changes for secrets with gitleaks in the pre-commit hook
+- [x] CHORE-002 - Type-check the code with mypy in the pre-commit hook (12 typing errors fixed)

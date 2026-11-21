@@ -88,7 +88,8 @@ def get_eml_parts(eml_path: Path):
     for part in msg.walk():
         ct = part.get_content_type()
         payload = part.get_payload(decode=True)
-        if payload is None:
+        # decode=True yields bytes for leaf parts, None for multipart containers
+        if not isinstance(payload, bytes):
             continue
         charset = part.get_content_charset() or "utf-8"
         decoded = payload.decode(charset, errors="replace")
@@ -201,7 +202,7 @@ def main(dry_run: bool, force_headers: bool | None = None):
         domain = sender_domain(msg.get("From", ""))
         provider_key, provider_cfg = detect_provider(domain, patterns)
 
-        if provider_key is None:
+        if provider_key is None or provider_cfg is None:
             log(f"Provider inconnu (domaine: {domain}) — {rel_path}", "WARN")
             entry["statut_extraction"] = "ERREUR"
             stats["erreurs"] += 1

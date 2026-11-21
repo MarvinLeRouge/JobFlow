@@ -7,7 +7,7 @@ from pathlib import Path
 
 def load_dedup_map(offres_csv: Path) -> tuple[dict, int]:
     """Retourne ({cle_dedup: id}, max_e_number) depuis offres.csv."""
-    dedup = {}
+    dedup: dict[str, str] = {}
     max_e = 0
     if not offres_csv.exists():
         return dedup, max_e

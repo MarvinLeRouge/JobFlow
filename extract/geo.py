@@ -34,9 +34,15 @@ def _nominatim_dept(ville: str) -> str:
         elapsed = time.time() - _last_nominatim_call
         if elapsed < 1.1:
             time.sleep(1.1 - elapsed)
+        params: dict[str, str | int] = {
+            "q": f"{ville}, France",
+            "format": "json",
+            "limit": 1,
+            "addressdetails": 1,
+        }
         r = requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": f"{ville}, France", "format": "json", "limit": 1, "addressdetails": 1},
+            params=params,
             headers={"User-Agent": "job-search-tracker/1.0"},
             timeout=5,
         )

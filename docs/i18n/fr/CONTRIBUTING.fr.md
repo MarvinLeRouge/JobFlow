@@ -27,6 +27,7 @@ uv run pre-commit install   # une fois, pour activer le hook git
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy .
 ```
 
 Les trois doivent passer avant d'ouvrir une pull request.
@@ -66,7 +67,7 @@ Note : le message de commit lui-même reste en anglais, y compris pour ce dépô
 
 ### Style de code
 
-- Python : [Ruff](https://docs.astral.sh/ruff/) pour le lint et le formatage, appliqué par `pre-commit` et la CI
+- Python : [Ruff](https://docs.astral.sh/ruff/) pour le lint et le formatage, appliqué par `pre-commit` et la CI ; [mypy](https://mypy-lang.org/) pour la vérification des types, appliqué par `pre-commit`
 - Tests : `pytest`, en miroir de la structure du code source sous `tests/`
 
 ## Code de conduite
