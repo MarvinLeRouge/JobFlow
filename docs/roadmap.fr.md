@@ -16,3 +16,4 @@
 - [x] CI-002 - Épingler chaque GitHub Action sur sa majeure actuelle par SHA de commit, workflow changelog sur Node 26, aligner la config Dependabot (groupe actions unique)
 - [x] CI-003 - Exclure le projet lui-même de l'export pip-audit (--no-emit-project)
 - [x] CI-004 - Relever le seuil de couverture de 80 % à 85 % (seuils et docs)
+- [x] CI-005 - Analyser les modifications indexées avec gitleaks dans le hook pre-commit
