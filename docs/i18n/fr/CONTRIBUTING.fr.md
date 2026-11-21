@@ -10,6 +10,7 @@ Ceci est un projet personnel, mais les contributions externes (signalement de bu
 
 - [uv](https://docs.astral.sh/uv/) (installe la version de Python fixée dans `.python-version`)
 - Un projet Google Cloud avec les API Gmail et Google Sheets activées, si vous comptez faire tourner le pipeline pour de vrai (voir [docs/setup_gmail_auth.fr.md](../../setup_gmail_auth.fr.md)). Non nécessaire pour lancer la suite de tests.
+- [gitleaks](https://github.com/gitleaks/gitleaks) : le hook pre-commit analyse les modifications indexées à la recherche de secrets et refuse de committer s'il est absent
 
 ## Installation locale
 

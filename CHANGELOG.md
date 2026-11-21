@@ -145,6 +145,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(actions)* Pin actions to current majors by sha (CI-002)
 - *(security)* Leave the project out of the pip-audit export (CI-003)
 - *(coverage)* Raise the coverage floor to 85% (CI-004)
+- *(security)* Scan staged changes for secrets with gitleaks (CI-005)
 
 
 ### Chore
