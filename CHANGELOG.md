@@ -146,6 +146,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(security)* Leave the project out of the pip-audit export (CI-003)
 - *(coverage)* Raise the coverage floor to 85% (CI-004)
 - *(security)* Scan staged changes for secrets with gitleaks (CI-005)
+- *(types)* Type-check the code with mypy in pre-commit (CHORE-002)
 
 
 ### Chore

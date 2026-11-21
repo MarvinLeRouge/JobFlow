@@ -48,7 +48,7 @@ def get_credentials(scopes: list[str] | None = None, token_file: Path | None = N
             # fall through to a fresh interactive consent instead of crashing.
             creds = None
 
-    if not refreshed:
+    if creds is None or not refreshed:
         flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), scopes)
         creds = flow.run_local_server(port=0)
 

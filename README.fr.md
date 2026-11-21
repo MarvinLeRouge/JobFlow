@@ -374,6 +374,7 @@ uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy .
 uv run pre-commit install   # une seule fois, pour activer le hook git
 ```
 
@@ -417,6 +418,7 @@ Projet personnel à double objectif :
 | Géocodage fallback | ![OpenStreetMap](https://img.shields.io/badge/Nominatim_(OSM)-7EBC6F?logo=openstreetmap&logoColor=white&style=flat-square) |
 | Tests | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white&style=flat-square) |
 | Linting | ![Ruff](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=black&style=flat-square) |
+| Typage | ![mypy](https://img.shields.io/badge/mypy-2A6DB2?logo=python&logoColor=white&style=flat-square) |
 | Pre-commit | ![pre-commit](https://img.shields.io/badge/pre--commit-FAB040?logo=precommit&logoColor=black&style=flat-square) |
 
 ---

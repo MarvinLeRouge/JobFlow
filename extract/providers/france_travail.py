@@ -34,9 +34,9 @@ def extract_france_travail(html: str, msg, patterns: dict) -> list[dict]:
         o["titre"] = clean_entities(re.sub(r"<[^>]+>", " ", titre_html)).strip()
 
         spans = [clean_entities(s).strip(" -") for s in FT_SPAN_RE.findall(loc_html)]
-        loc_span = next((s for s in spans if FT_LOC_RE.match(s)), None)
-        if loc_span:
-            loc_m = FT_LOC_RE.match(loc_span)
+        loc = next(((s, lm) for s in spans if (lm := FT_LOC_RE.match(s))), None)
+        if loc:
+            loc_span, loc_m = loc
             o["dept"] = loc_m.group(1)
             o["ville"] = loc_m.group(2).strip()
             autres = [s for s in spans if s is not loc_span]

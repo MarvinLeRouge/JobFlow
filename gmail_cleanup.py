@@ -47,7 +47,7 @@ def known_processed_gmail_ids(ledger: dict) -> set[str]:
 
 
 def list_labeled_message_ids(service, label_id: str) -> list[str]:
-    ids = []
+    ids: list[str] = []
     request = service.users().messages().list(userId="me", labelIds=[label_id])
     while request is not None:
         response = request.execute()

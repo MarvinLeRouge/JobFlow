@@ -16,6 +16,7 @@ dev = [
     "ruff>=0.17.4",
     "pre-commit>=4.7.0",
     "pip-audit>=2.10.1",
+    "mypy>=2.4.1",
 ]
 
 [tool.uv]
@@ -27,6 +28,16 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.14"
+# archive/ holds old local scripts, gitignored
+exclude = ["^archive/"]
+
+# Google client libraries ship no type information
+[[tool.mypy.overrides]]
+module = ["googleapiclient.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

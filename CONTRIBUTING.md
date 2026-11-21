@@ -27,6 +27,7 @@ uv run pre-commit install   # once, to enable the git hook
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy .
 ```
 
 All three must pass before opening a pull request.
@@ -64,7 +65,7 @@ Modified files:
 
 ### Code style
 
-- Python: [Ruff](https://docs.astral.sh/ruff/) for linting and formatting, enforced by `pre-commit` and CI
+- Python: [Ruff](https://docs.astral.sh/ruff/) for linting and formatting, enforced by `pre-commit` and CI; [mypy](https://mypy-lang.org/) for type checking, enforced by `pre-commit`
 - Tests: `pytest`, mirroring the source structure under `tests/`
 
 ## Code of Conduct
