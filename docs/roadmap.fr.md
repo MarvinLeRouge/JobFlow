@@ -18,3 +18,4 @@
 - [x] CI-004 - Relever le seuil de couverture de 80 % à 85 % (seuils et docs)
 - [x] CI-005 - Analyser les modifications indexées avec gitleaks dans le hook pre-commit
 - [x] CHORE-002 - Vérifier les types avec mypy dans le hook pre-commit (12 erreurs de typage corrigées)
+- [x] DOCS-001 - Rédiger le contexte produit (pipeline d'alertes emploi et suivi des candidatures)
