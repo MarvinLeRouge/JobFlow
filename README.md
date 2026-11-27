@@ -402,7 +402,7 @@ See [docs/roadmap.md](docs/roadmap.md).
 
 Personal project with a dual purpose:
 
-- **Solve a real need** — centralize job alerts scattered across six providers and up to a dozen emails a day into one deduplicated, filtered, always-current Google Sheet
+- **Solve a real need** — centralize job alerts scattered across seven providers and up to a dozen emails a day into one deduplicated, filtered, always-current Google Sheet
 - **Portfolio** — demonstrates a structured, tested pipeline: OAuth2 integrations (Gmail + Sheets), regex-based HTML parsing per provider, cross-provider deduplication, and a persistent error gate protecting the production sheet from partial syncs
 
 ---

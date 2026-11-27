@@ -403,7 +403,7 @@ Voir [docs/roadmap.fr.md](docs/roadmap.fr.md).
 
 Projet personnel à double objectif :
 
-- **Répondre à un besoin réel** — centraliser des alertes emploi dispersées entre six providers et jusqu'à une dizaine d'emails par jour dans un Google Sheet unique, dédoublonné, filtré et toujours à jour
+- **Répondre à un besoin réel** — centraliser des alertes emploi dispersées entre sept providers et jusqu'à une dizaine d'emails par jour dans un Google Sheet unique, dédoublonné, filtré et toujours à jour
 - **Portfolio** — démontre un pipeline structuré et testé : intégrations OAuth2 (Gmail + Sheets), parsing HTML par regex par provider, déduplication cross-provider, et un verrou d'erreur persistant qui protège la feuille de production contre les synchronisations partielles
 
 ---

@@ -102,6 +102,7 @@ run `git-cliff -o CHANGELOG.md`.
 - Align README test count and coverage paragraph
 - *(readme)* Fix pipeline step count from four to five
 - *(readme)* Add gmail_labeling step to overview diagram
+- Write the product context (DOCS-001)
 
 
 ### Testing
