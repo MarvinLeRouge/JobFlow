@@ -158,5 +158,7 @@ run `git-cliff -o CHANGELOG.md`.
 - *(deps)* Migrate from pip to uv with latest dependencies
 - *(deps)* Bump actions/checkout from 4 to 7
 - *(deps)* Bump actions/setup-node from 4 to 7
+- *(deps)* Bump astral-sh/setup-uv
+- *(deps-dev)* Bump ruff
 
 
